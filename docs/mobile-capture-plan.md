@@ -23,7 +23,7 @@ No edge function needed. The PWA talks directly to Supabase using `@supabase/sup
 
 ## PWA — Open Questions
 
-- **Hosting**: Supabase hosting? Vercel/Netlify static? GitHub Pages? Or just serve from the repo?  Consider https://github.com/fernandoviton/listlet-shared.  This deserves a planning session of its own.  Use a subagent.
+- **Hosting**: **Decided — GitHub Pages** (monorepo, deployed via GitHub Actions from `frontend/`). Same pattern as `listlet-shared`.
 - **Framework**: Vanilla HTML/JS? Preact/React? Keep it minimal — it's a capture form, not a dashboard.  Vanilla to start.  Maybe when we do more than capture we revisit.
 - **OAuth flow on mobile**: Supabase JS client handles Google OAuth via redirect. Need to configure the redirect URL in Supabase dashboard for the PWA's domain.
 - **PWA install experience**: manifest.json, service worker for offline queueing, home screen icon.

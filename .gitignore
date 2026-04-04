@@ -20,3 +20,6 @@ nul
 
 # Node
 node_modules/
+
+# Frontend local config
+frontend/config.local.js
