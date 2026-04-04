@@ -1,0 +1,25 @@
+{
+  "name": "brainy",
+  "version": "1.0.0",
+  "description": "A lightweight personal knowledge and TODO management system designed to work with Claude/AI assistants.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR-USERNAME/brainy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/YOUR-USERNAME/brainy/issues"
+  },
+  "homepage": "https://github.com/YOUR-USERNAME/brainy#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "dotenv": "^17.4.0"
+  }
+}
