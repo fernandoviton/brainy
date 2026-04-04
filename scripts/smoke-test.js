@@ -2,7 +2,7 @@
  * Smoke test: verifies auth, CRUD on todos, and RLS isolation.
  * Run: node scripts/smoke-test.js
  */
-const { supabase, login } = require('../lib/supabase-client');
+const { supabase, login } = require('../backend/supabase-client');
 
 const TEST_TODO = {
   name: `smoke-test-${Date.now()}`,

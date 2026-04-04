@@ -1,6 +1,6 @@
 /**
  * Shared mock that stubs the Supabase query builder chain.
- * Usage: jest.mock('../lib/supabase-client') then configure _mockResult / _mockError.
+ * Usage: jest.mock('../backend/supabase-client') then configure _mockResult / _mockError.
  */
 
 let _mockResult = { data: [], error: null };

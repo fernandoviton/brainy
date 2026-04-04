@@ -68,57 +68,57 @@ This tests auth, CRUD operations on the `brainy_todos` table, and RLS isolation.
 
 ```bash
 # List all TODOs
-node lib/cli.js todo list
+node backend/cli.js todo list
 
 # List by status (inbox, active, later, scheduled)
-node lib/cli.js todo list --status active
+node backend/cli.js todo list --status active
 
 # JSON output (for scripting)
-node lib/cli.js todo list --format json
+node backend/cli.js todo list --format json
 
 # Get full details on a TODO (notes, collateral, metadata)
-node lib/cli.js todo get <name>
+node backend/cli.js todo get <name>
 
 # Create a TODO
-node lib/cli.js todo create --name "my-task" --summary "Do the thing" --status inbox --priority P2
+node backend/cli.js todo create --name "my-task" --summary "Do the thing" --status inbox --priority P2
 
 # Update fields
-node lib/cli.js todo update my-task --status active --priority P1
+node backend/cli.js todo update my-task --status active --priority P1
 
 # Update notes via stdin
-echo "Made progress on X" | node lib/cli.js todo update my-task --field notes --stdin
+echo "Made progress on X" | node backend/cli.js todo update my-task --field notes --stdin
 
 # Archive a completed TODO
-node lib/cli.js todo archive my-task --summary-text "Done, learned Y"
+node backend/cli.js todo archive my-task --summary-text "Done, learned Y"
 
 # Delete a TODO
-node lib/cli.js todo delete my-task
+node backend/cli.js todo delete my-task
 ```
 
 ### Knowledge
 
 ```bash
 # List all knowledge files
-node lib/cli.js knowledge list
+node backend/cli.js knowledge list
 
 # Filter by path prefix
-node lib/cli.js knowledge list --prefix "tools/"
+node backend/cli.js knowledge list --prefix "tools/"
 
 # Read a knowledge file
-node lib/cli.js knowledge get tools/docker/networking.yml
+node backend/cli.js knowledge get tools/docker/networking.yml
 
 # Create or update a knowledge file
-echo "topic: my-topic" | node lib/cli.js knowledge upsert --path "category/my-topic.yml" --stdin
+echo "topic: my-topic" | node backend/cli.js knowledge upsert --path "category/my-topic.yml" --stdin
 ```
 
 ### Maintenance
 
 ```bash
 # Run integrity checks (same as the post-session hook)
-node lib/cli.js check-integrity
+node backend/cli.js check-integrity
 
 # Promote scheduled items dated today or earlier to active
-node lib/cli.js promote-scheduled
+node backend/cli.js promote-scheduled
 ```
 
 ## AI Commands

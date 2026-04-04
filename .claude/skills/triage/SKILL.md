@@ -9,7 +9,7 @@ Process inbox items one at a time using `/add-todo` logic.
 
 1. Fetch inbox items:
    ```bash
-   node lib/cli.js todo list --status inbox --format json
+   node backend/cli.js todo list --status inbox --format json
    ```
    If the inbox is empty, tell the user and stop.
 
@@ -18,7 +18,7 @@ Process inbox items one at a time using `/add-todo` logic.
    b. Ask clarifying questions (same as `/add-todo` step 2): priority, destination, scheduled date if applicable, due date, blocked_by.
    c. Update the TODO to its new destination:
       ```bash
-      node lib/cli.js todo update <name> --status <new-status> --priority <priority> --category <category>
+      node backend/cli.js todo update <name> --status <new-status> --priority <priority> --category <category>
       ```
       Add `--scheduled-date <date>` if moving to scheduled.
       Add `--due <date>` if a due date was specified.

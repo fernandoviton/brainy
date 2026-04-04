@@ -23,7 +23,7 @@ Knowledge is stored in a Supabase database, organized by path (e.g., `tools/dock
 
 1. List existing knowledge files:
    ```bash
-   node lib/cli.js knowledge list --format json
+   node backend/cli.js knowledge list --format json
    ```
 2. If a file for this topic already exists → **fetch and update it** (see step 3)
 3. If not → **create it** with an appropriate category path
@@ -37,12 +37,12 @@ Knowledge is stored in a Supabase database, organized by path (e.g., `tools/dock
 
 To read existing content:
 ```bash
-node lib/cli.js knowledge get <path> --format json
+node backend/cli.js knowledge get <path> --format json
 ```
 
 To write/update:
 ```bash
-echo "<full YAML content>" | node lib/cli.js knowledge upsert --path "<category/topic-name.yml>" --stdin
+echo "<full YAML content>" | node backend/cli.js knowledge upsert --path "<category/topic-name.yml>" --stdin
 ```
 
 Every knowledge file uses this schema:
@@ -81,7 +81,7 @@ If the input implies action items:
 - Present them: "This suggests the following TODOs: ..."
 - Offer to create them via CLI:
   ```bash
-  node lib/cli.js todo create --name "<name>" --summary "<summary>" --status inbox
+  node backend/cli.js todo create --name "<name>" --summary "<summary>" --status inbox
   ```
 
 ### 5. Confirm

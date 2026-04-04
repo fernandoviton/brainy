@@ -3,20 +3,20 @@
  * Brainy CLI — unified interface for both file and Supabase backends.
  *
  * Usage:
- *   node lib/cli.js todo list [--status <status>] [--format json]
- *   node lib/cli.js todo get <name> [--format json]
- *   node lib/cli.js todo create --name <name> --summary <summary> [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>]
- *   node lib/cli.js todo update <name> [--summary <s>] [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>] [--field notes --stdin]
- *   node lib/cli.js todo delete <name>
- *   node lib/cli.js todo archive <name> [--summary-text <text>] [--completion-date <d>]
- *   node lib/cli.js capture list [--all] [--format json]
- *   node lib/cli.js capture get <id> [--format json]
- *   node lib/cli.js capture process <id>
- *   node lib/cli.js knowledge list [--prefix <prefix>] [--format json]
- *   node lib/cli.js knowledge get <path> [--format json]
- *   node lib/cli.js knowledge upsert --path <path> --stdin
- *   node lib/cli.js check-integrity
- *   node lib/cli.js promote-scheduled
+ *   node backend/cli.js todo list [--status <status>] [--format json]
+ *   node backend/cli.js todo get <name> [--format json]
+ *   node backend/cli.js todo create --name <name> --summary <summary> [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>]
+ *   node backend/cli.js todo update <name> [--summary <s>] [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>] [--field notes --stdin]
+ *   node backend/cli.js todo delete <name>
+ *   node backend/cli.js todo archive <name> [--summary-text <text>] [--completion-date <d>]
+ *   node backend/cli.js capture list [--all] [--format json]
+ *   node backend/cli.js capture get <id> [--format json]
+ *   node backend/cli.js capture process <id>
+ *   node backend/cli.js knowledge list [--prefix <prefix>] [--format json]
+ *   node backend/cli.js knowledge get <path> [--format json]
+ *   node backend/cli.js knowledge upsert --path <path> --stdin
+ *   node backend/cli.js check-integrity
+ *   node backend/cli.js promote-scheduled
  */
 const { getStorage } = require('./storage');
 
@@ -228,7 +228,7 @@ async function main() {
         console.log(`Promoted ${promoted.length} item(s): ${promoted.join(', ')}`);
       }
     } else {
-      console.error('Usage: node lib/cli.js <todo|capture|knowledge|check-integrity|promote-scheduled> ...');
+      console.error('Usage: node backend/cli.js <todo|capture|knowledge|check-integrity|promote-scheduled> ...');
       process.exit(1);
     }
   } catch (err) {

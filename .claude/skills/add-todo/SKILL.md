@@ -22,14 +22,14 @@ Add a new TODO from freeform text.
 
 3. Create the TODO via CLI:
    ```bash
-   node lib/cli.js todo create --name "<name>" --summary "<summary>" --status <status> --priority <priority> --category <category>
+   node backend/cli.js todo create --name "<name>" --summary "<summary>" --status <status> --priority <priority> --category <category>
    ```
    Add `--due <date>` if a due date was specified.
    Add `--scheduled-date <date>` if status is scheduled.
 
 4. If the TODO needs notes or additional context from the input, update it:
    ```bash
-   echo "<notes content>" | node lib/cli.js todo update <name> --field notes --stdin
+   echo "<notes content>" | node backend/cli.js todo update <name> --field notes --stdin
    ```
 
 5. Confirm what was created and suggest next actions (e.g., "Run `/breakdown todo-name` to decompose").

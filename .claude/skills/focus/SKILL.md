@@ -9,7 +9,7 @@ Recommend the single most important thing to work on right now.
 
 1. Fetch all TODOs with metadata:
    ```bash
-   node lib/cli.js todo list --format json
+   node backend/cli.js todo list --format json
    ```
 
 2. Filter to active + inbox + items scheduled for today.

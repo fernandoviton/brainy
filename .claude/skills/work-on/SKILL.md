@@ -9,14 +9,14 @@ Work on a specific TODO — the primary skill for making progress.
 
 1. Fetch the TODO with full details:
    ```bash
-   node lib/cli.js todo get <todo-name> --format json
+   node backend/cli.js todo get <todo-name> --format json
    ```
 
 2. If the TODO has collateral listed in the JSON output, review it for full context.
 
 3. If the TODO is not already active, move it:
    ```bash
-   node lib/cli.js todo update <todo-name> --status active
+   node backend/cli.js todo update <todo-name> --status active
    ```
 
 4. **Route Assessment** — Before diving in, classify the work and check fit:
@@ -48,7 +48,7 @@ Work on a specific TODO — the primary skill for making progress.
 
 6. Update notes with progress:
    ```bash
-   echo "<progress notes>" | node lib/cli.js todo update <todo-name> --field notes --stdin
+   echo "<progress notes>" | node backend/cli.js todo update <todo-name> --field notes --stdin
    ```
 
 7. **Evaluate completion**: After work is done, assess whether the TODO is fully complete.
@@ -56,11 +56,11 @@ Work on a specific TODO — the primary skill for making progress.
      1. Extract learnings → update knowledge via CLI and/or `CLAUDE.md`
      2. Archive the TODO:
         ```bash
-        node lib/cli.js todo archive <todo-name> --summary-text "<completion summary>" --completion-date <YYYY-MM-DD>
+        node backend/cli.js todo archive <todo-name> --summary-text "<completion summary>" --completion-date <YYYY-MM-DD>
         ```
    - **If not complete**: Update the TODO with current status and remaining work:
      ```bash
-     echo "<updated notes>" | node lib/cli.js todo update <todo-name> --field notes --stdin
+     echo "<updated notes>" | node backend/cli.js todo update <todo-name> --field notes --stdin
      ```
 
 ## Allowed Tools

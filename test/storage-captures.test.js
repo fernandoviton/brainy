@@ -1,8 +1,8 @@
 const mockSupabase = require('./helpers/mock-supabase');
 
-jest.mock('../lib/supabase-client', () => mockSupabase);
+jest.mock('../backend/supabase-client', () => mockSupabase);
 
-const storage = require('../lib/storage-supabase');
+const storage = require('../backend/storage-supabase');
 
 beforeEach(() => {
   jest.clearAllMocks();

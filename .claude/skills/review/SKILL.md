@@ -9,12 +9,12 @@ Review all TODOs and suggest actions.
 
 1. Fetch all TODOs with full metadata:
    ```bash
-   node lib/cli.js todo list --format json
+   node backend/cli.js todo list --format json
    ```
 
 2. For any TODOs that need more detail (notes, collateral), fetch individually:
    ```bash
-   node lib/cli.js todo get <name> --format json
+   node backend/cli.js todo get <name> --format json
    ```
 
 3. Generate a review report covering:
@@ -27,7 +27,7 @@ Review all TODOs and suggest actions.
 
 4. Suggest reprioritization where appropriate. Offer to move items between inbox/active/later using:
    ```bash
-   node lib/cli.js todo update <name> --status <new-status>
+   node backend/cli.js todo update <name> --status <new-status>
    ```
 
 5. **Proactive proposals**: For each TODO, evaluate whether the agent can make independent progress right now. For actionable ones:

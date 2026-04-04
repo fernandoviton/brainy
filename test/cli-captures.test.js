@@ -15,11 +15,11 @@ const mockStorage = {
   promoteScheduled: jest.fn(),
 };
 
-jest.mock('../lib/storage', () => ({
+jest.mock('../backend/storage', () => ({
   getStorage: () => mockStorage,
 }));
 
-const { main } = require('../lib/cli.js');
+const { main } = require('../backend/cli.js');
 
 function runCLI(args) {
   const origArgv = process.argv;
@@ -31,7 +31,7 @@ function runCLI(args) {
   const errors = [];
   let exitCode = 0;
 
-  process.argv = ['node', 'lib/cli.js', ...args];
+  process.argv = ['node', 'backend/cli.js', ...args];
   console.log = (...a) => output.push(a.join(' '));
   console.error = (...a) => errors.push(a.join(' '));
   process.exit = (code) => {

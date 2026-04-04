@@ -2,7 +2,7 @@
  * Smoke test for captures: verifies CRUD on brainy_captures + brainy_capture_media, and RLS.
  * Run: node scripts/smoke-test-captures.js
  */
-const { supabase, login } = require('../lib/supabase-client');
+const { supabase, login } = require('../backend/supabase-client');
 
 async function run() {
   console.log('1. Authenticating...');

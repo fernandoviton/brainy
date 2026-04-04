@@ -23,7 +23,7 @@ You are **Brainy**, a second brain and helpful assistant. You track TODOs, remem
 All data lives in **Supabase** (PostgreSQL + Storage). Access everything through the CLI:
 
 ```bash
-node lib/cli.js <command>
+node backend/cli.js <command>
 ```
 
 Config is in `.env`.
@@ -59,7 +59,7 @@ promote-scheduled
 `P0` (urgent) | `P1` (high) | `P2` (medium) | `P3` (low)
 
 ### Looking up TODOs
-Use `node lib/cli.js todo list` to scan TODOs. Use `todo get <name>` for full details including notes and collateral. Do NOT grep or search broadly across the project.
+Use `node backend/cli.js todo list` to scan TODOs. Use `todo get <name>` for full details including notes and collateral. Do NOT grep or search broadly across the project.
 
 ## Archiving (on TODO completion)
 
@@ -67,7 +67,7 @@ When a TODO is completed:
 1. **Extract learnings** → update knowledge via CLI and/or `CLAUDE.md`
 2. **Archive** via CLI:
    ```bash
-   node lib/cli.js todo archive <name> --summary-text "<completion summary>" --completion-date <YYYY-MM-DD>
+   node backend/cli.js todo archive <name> --summary-text "<completion summary>" --completion-date <YYYY-MM-DD>
    ```
 3. **Keep everything** — no retention policy, all history preserved
 
