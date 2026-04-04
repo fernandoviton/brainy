@@ -1,3 +1,3 @@
 @echo off
-node "%~dp0..\..\lib\cli.js" promote-scheduled 1>&2
+node "%~dp0..\..\backend\cli.js" promote-scheduled 1>&2
 exit /b %errorlevel%
