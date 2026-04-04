@@ -37,6 +37,10 @@ todo create --name <name> --summary <summary> --status <status> [--priority <p>]
 todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin] [--blocked-by <name>]
 todo archive <name> --summary-text <text> --completion-date <date>
 
+capture list [--all] [--format json]
+capture get <id> [--format json]
+capture process <id>
+
 knowledge list [--prefix <path>] [--format json]
 knowledge get <path> [--format json]
 knowledge upsert --path <path> --stdin

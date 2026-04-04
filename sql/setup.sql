@@ -194,6 +194,50 @@ create policy "Users manage own brainy_archive_summaries" on brainy_archive_summ
   with check (auth.uid() = user_id);
 
 ----------------------------------------------------------------------
+-- brainy_captures
+----------------------------------------------------------------------
+create table if not exists brainy_captures (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) not null,
+  text text,
+  processed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_brainy_captures_user_processed
+  on brainy_captures (user_id, processed_at);
+
+alter table brainy_captures enable row level security;
+
+drop policy if exists "Users manage own brainy_captures" on brainy_captures;
+create policy "Users manage own brainy_captures" on brainy_captures
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+----------------------------------------------------------------------
+-- brainy_capture_media
+----------------------------------------------------------------------
+create table if not exists brainy_capture_media (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) not null,
+  capture_id uuid references brainy_captures(id) on delete cascade not null,
+  filename text not null,
+  content_type text,
+  storage_path text not null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_brainy_capture_media_capture
+  on brainy_capture_media (capture_id);
+
+alter table brainy_capture_media enable row level security;
+
+drop policy if exists "Users manage own brainy_capture_media" on brainy_capture_media;
+create policy "Users manage own brainy_capture_media" on brainy_capture_media
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+----------------------------------------------------------------------
 -- Storage bucket for binary files
 ----------------------------------------------------------------------
 insert into storage.buckets (id, name, public)
