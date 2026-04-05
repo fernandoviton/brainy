@@ -60,4 +60,45 @@ button {
 #capture-form button {
   background: #1a73e8;
   color: #fff;
+  transition: background 0.3s ease;
+}
+
+#capture-form button.btn-success {
+  background: #28a745;
+}
+
+#top-bar {
+  text-align: right;
+  margin-bottom: 0.5rem;
+}
+
+#logout-btn {
+  background: transparent;
+  color: #888;
+  font-size: 0.8rem;
+  width: auto;
+  display: inline;
+  padding: 0.25rem 0.5rem;
+}
+
+#status-msg {
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+#status-msg:empty {
+  display: none;
+}
+
+.status-success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-error {
+  background: #f8d7da;
+  color: #721c24;
 }

@@ -1,4 +1,4 @@
-var CONFIG = {
-    SUPABASE_URL: '',
-    SUPABASE_PUBLISHABLE_KEY: '',
-};
+// Defaults — override in config.local.js (gitignored)
+var CONFIG = CONFIG || {};
+CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || '';
+CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';

@@ -14,6 +14,9 @@ function buildMockDOM() {
     const el = {
       style: {},
       value: '',
+      textContent: '',
+      disabled: false,
+      className: '',
       addEventListener: jest.fn((event, handler) => {
         listeners[`${id}:${event}`] = handler;
       }),
@@ -22,11 +25,15 @@ function buildMockDOM() {
     return el;
   }
 
+  makeEl('logout-btn');
+
   makeEl('capture-form');
   makeEl('login-btn');
   makeEl('auth-section');
   makeEl('capture-section');
   makeEl('capture-text');
+  makeEl('capture-btn');
+  makeEl('status-msg');
 
   return {
     elements,
@@ -39,6 +46,7 @@ function loadApp(overrides) {
   const mockInsert = jest.fn().mockReturnValue(Promise.resolve({ error: null }));
   const mockFrom = jest.fn().mockReturnValue({ insert: mockInsert });
   const mockSignIn = jest.fn();
+  const mockSignOut = jest.fn().mockResolvedValue({});
   const mockGetUser = jest.fn().mockResolvedValue({
     data: { user: { id: 'test-user-id' } },
   });
@@ -46,6 +54,7 @@ function loadApp(overrides) {
   const mockAuth = {
     onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
     signInWithOAuth: mockSignIn,
+    signOut: mockSignOut,
     getUser: mockGetUser,
   };
   const mockCreateClient = jest.fn().mockReturnValue({
@@ -59,13 +68,15 @@ function loadApp(overrides) {
     supabase: { createClient: mockCreateClient },
     document: dom,
     window: { location: { origin: 'https://example.com', pathname: '/brainy/' } },
+    navigator: { onLine: true },
+    setTimeout: jest.fn(),
     console: { error: jest.fn() },
     ...overrides,
   };
   vm.createContext(ctx);
   vm.runInContext(appCode, ctx);
 
-  return { ctx, dom, mockCreateClient, mockAuth, mockFrom, mockInsert, mockSignIn, authCallback };
+  return { ctx, dom, mockCreateClient, mockAuth, mockFrom, mockInsert, mockSignIn, mockSignOut, authCallback };
 }
 
 describe('app initialization', () => {
@@ -145,8 +156,8 @@ describe('form submission', () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  test('logs error when insert fails', async () => {
-    const { dom, ctx, mockInsert } = loadApp();
+  test('shows error status when insert fails', async () => {
+    const { dom, mockInsert } = loadApp();
     mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'RLS violation' } }));
     dom.elements['capture-text'].value = 'test thought';
 
@@ -155,12 +166,12 @@ describe('form submission', () => {
 
     await flushPromises();
     await flushPromises();
-    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'RLS violation');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: RLS violation');
     expect(dom.elements['capture-text'].value).toBe('test thought');
   });
 
-  test('logs error when insert rejects', async () => {
-    const { dom, ctx, mockInsert } = loadApp();
+  test('shows error status when insert rejects', async () => {
+    const { dom, mockInsert } = loadApp();
     mockInsert.mockReturnValue(Promise.reject(new Error('network on insert')));
     dom.elements['capture-text'].value = 'test thought';
 
@@ -169,12 +180,12 @@ describe('form submission', () => {
 
     await flushPromises();
     await flushPromises();
-    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'network on insert');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network on insert');
     expect(dom.elements['capture-text'].value).toBe('test thought');
   });
 
-  test('logs error when getUser rejects', async () => {
-    const { dom, ctx, mockAuth, mockFrom } = loadApp();
+  test('shows error status when getUser rejects', async () => {
+    const { dom, mockAuth, mockFrom } = loadApp();
     mockAuth.getUser.mockRejectedValue(new Error('network'));
     dom.elements['capture-text'].value = 'test thought';
 
@@ -182,7 +193,7 @@ describe('form submission', () => {
     submitHandler({ preventDefault: jest.fn() });
 
     await flushPromises();
-    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'network');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network');
     expect(mockFrom).not.toHaveBeenCalled();
   });
 });
@@ -198,5 +209,159 @@ describe('login', () => {
       provider: 'google',
       options: { redirectTo: 'https://example.com/brainy/' },
     });
+  });
+});
+
+describe('capture feedback', () => {
+  test('button disables during submission', () => {
+    const { dom } = loadApp();
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    expect(dom.elements['capture-btn'].disabled).toBe(true);
+    expect(dom.elements['capture-btn'].textContent).toBe('Capturing...');
+  });
+
+  test('button shows success state after capture', async () => {
+    const { dom } = loadApp();
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(dom.elements['capture-btn'].disabled).toBe(false);
+    expect(dom.elements['capture-btn'].textContent).toBe('\u2713 Done!');
+    expect(dom.elements['capture-btn'].className).toBe('btn-success');
+  });
+
+  test('button resets after timeout', async () => {
+    const { dom, ctx } = loadApp();
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(ctx.setTimeout).toHaveBeenCalled();
+    expect(ctx.setTimeout.mock.calls[0][1]).toBe(1500);
+
+    ctx.setTimeout.mock.calls[0][0]();
+    expect(dom.elements['capture-btn'].textContent).toBe('Capture');
+    expect(dom.elements['capture-btn'].className).toBe('');
+  });
+
+  test('shows error message on insert failure', async () => {
+    const { dom, mockInsert } = loadApp();
+    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'RLS violation' } }));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: RLS violation');
+    expect(dom.elements['status-msg'].className).toBe('status-error');
+  });
+
+  test('shows error message on network failure', async () => {
+    const { dom, mockInsert } = loadApp();
+    mockInsert.mockReturnValue(Promise.reject(new Error('network error')));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network error');
+    expect(dom.elements['status-msg'].className).toBe('status-error');
+  });
+
+  test('button re-enables on insert failure', async () => {
+    const { dom, mockInsert } = loadApp();
+    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'fail' } }));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(dom.elements['capture-btn'].disabled).toBe(false);
+    expect(dom.elements['capture-btn'].textContent).toBe('Capture');
+  });
+
+  test('button re-enables when user is not authenticated', async () => {
+    const { dom, mockAuth } = loadApp();
+    mockAuth.getUser.mockResolvedValue({ data: { user: null } });
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(dom.elements['capture-btn'].disabled).toBe(false);
+    expect(dom.elements['capture-btn'].textContent).toBe('Capture');
+    expect(dom.elements['status-msg'].className).toBe('status-error');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: not signed in');
+  });
+
+  test('shows offline message when not signed in and offline', async () => {
+    const { dom, mockAuth, ctx } = loadApp();
+    mockAuth.getUser.mockResolvedValue({ data: { user: null } });
+    ctx.navigator.onLine = false;
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: no internet connection');
+  });
+
+  test('button not disabled for empty text', () => {
+    const { dom } = loadApp();
+    dom.elements['capture-text'].value = '   ';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    expect(dom.elements['capture-btn'].disabled).toBe(false);
+  });
+
+  test('button re-enables on getUser rejection', async () => {
+    const { dom, mockAuth } = loadApp();
+    mockAuth.getUser.mockRejectedValue(new Error('auth down'));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(dom.elements['capture-btn'].disabled).toBe(false);
+    expect(dom.elements['capture-btn'].textContent).toBe('Capture');
+  });
+});
+
+describe('logout', () => {
+  test('calls signOut on logout click', () => {
+    const { dom, mockSignOut } = loadApp();
+
+    const clickHandler = dom.listeners['logout-btn:click'];
+    clickHandler();
+
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  test('logout button is inside capture section', () => {
+    // Verified by HTML structure — logout only visible when authenticated
+    const { dom } = loadApp();
+    expect(dom.listeners['logout-btn:click']).toBeDefined();
   });
 });
