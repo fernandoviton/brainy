@@ -16,3 +16,20 @@ With Supabase as the backend, Brainy can work from any machine with the CLI and 
 
 ## Binary Collateral in Supabase Storage
 Store PDFs, images, and other binary collateral in the `brainy_files` Storage bucket instead of the filesystem. The `todo_collateral` and `knowledge_attachments` tables already support `storage_path`.
+
+## Isolate Brainy into Its Own Supabase Project
+
+**Problem:** Brainy shares a Supabase project with other apps. Since all apps authenticate as the same user (same `auth.uid()`), and RLS policies gate on uid alone, any app's credentials can read/write/delete data belonging to any other app in the project. Supabase RLS cannot distinguish *which app* is making a request — only *which user*. This means a compromised or buggy app could affect Brainy's data, and vice versa.
+
+**Why not per-app RLS or DB roles?**
+- Adding an `app_id` column to RLS policies doesn't help — the app self-reports its identity, so nothing prevents a client from claiming to be a different app.
+- Custom Postgres roles per app aren't usable through Supabase's PostgREST API, which uses fixed `anon`/`authenticated` roles.
+
+**Plan:** Migrate Brainy to its own Supabase project (free tier allows 2 projects). Keep the other project for everything else. If a second app ever needs isolation, upgrade to Pro for more projects.
+
+**Steps:**
+1. Create a new Supabase project for Brainy
+2. Run `sql/setup.sql` against the new project
+3. Migrate existing data (export/import brainy_* tables and storage bucket)
+4. Update `.env` with new project URL, publishable key, and refresh token
+5. Drop brainy_* tables and RLS policies from the old project
