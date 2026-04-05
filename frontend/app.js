@@ -7,6 +7,12 @@ var authSection = document.getElementById('auth-section');
 var captureSection = document.getElementById('capture-section');
 var captureBtn = document.getElementById('capture-btn');
 var statusMsg = document.getElementById('status-msg');
+var fileInput = document.getElementById('file-input');
+var attachBtn = document.getElementById('attach-btn');
+var filePreview = document.getElementById('file-preview');
+var resizeStatus = document.getElementById('resize-status');
+
+var _pendingFiles = [];
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
@@ -41,15 +47,43 @@ logoutBtn.addEventListener('click', function () {
   db.auth.signOut();
 });
 
+attachBtn.addEventListener('click', function () {
+  fileInput.click();
+});
+
+function _renderPreview() {
+  var html = '';
+  for (var i = 0; i < _pendingFiles.length; i++) {
+    html += '<div class="file-preview-item">' +
+      '<span>' + _pendingFiles[i].name + '</span>' +
+      '<button type="button" data-index="' + i + '" class="remove-file">\u00d7</button>' +
+      '</div>';
+  }
+  filePreview.innerHTML = html;
+}
+
+function _removeFile(index) {
+  _pendingFiles.splice(index, 1);
+  _renderPreview();
+}
+
+fileInput.addEventListener('change', function () {
+  for (var i = 0; i < fileInput.files.length; i++) {
+    _pendingFiles.push(fileInput.files[i]);
+  }
+  _renderPreview();
+});
+
 captureForm.addEventListener('submit', function (e) {
   e.preventDefault();
   var text = document.getElementById('capture-text').value.trim();
-  if (!text) return;
+  if (!text && _pendingFiles.length === 0) return;
 
   captureBtn.disabled = true;
-  captureBtn.textContent = 'Capturing...';
+  captureBtn.textContent = _pendingFiles.length > 0 ? 'Uploading...' : 'Capturing...';
   statusMsg.textContent = '';
   statusMsg.className = '';
+  resizeStatus.textContent = '';
 
   db.auth.getUser().then(function (userResult) {
     if (!userResult.data.user) {
@@ -58,15 +92,18 @@ captureForm.addEventListener('submit', function (e) {
       resetButton();
       return;
     }
-    return db.from('brainy_captures')
-      .insert({ text: text, user_id: userResult.data.user.id })
+    return uploadCapture(db, userResult.data.user.id, text, _pendingFiles)
       .then(function (result) {
-        if (result.error) {
-          showStatus('Capture failed: ' + result.error.message, 'status-error');
-          resetButton();
-          return;
+        // Show resize notifications
+        var resized = result.resizedFiles.filter(function (f) { return f.wasResized; });
+        if (resized.length > 0) {
+          var names = resized.map(function (f) { return f.name; }).join(', ');
+          resizeStatus.textContent = 'Resized: ' + names;
         }
+
         document.getElementById('capture-text').value = '';
+        _pendingFiles = [];
+        filePreview.innerHTML = '';
         captureBtn.textContent = '\u2713 Done!';
         captureBtn.className = 'btn-success';
         captureBtn.disabled = false;
@@ -76,7 +113,13 @@ captureForm.addEventListener('submit', function (e) {
         }, 1500);
       });
   }).catch(function (err) {
-    showStatus('Capture failed: ' + err.message, 'status-error');
+    var msg = err.message;
+    if (msg.match(/fetch/i)) {
+      msg = "can't find the file, please try again";
+    } else if (msg.match(/network/i)) {
+      msg = 'check your internet connection';
+    }
+    showStatus('Capture failed: ' + msg, 'status-error');
     resetButton();
   });
 });

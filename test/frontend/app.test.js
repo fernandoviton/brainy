@@ -35,6 +35,16 @@ function buildMockDOM() {
   makeEl('capture-btn');
   makeEl('status-msg');
 
+  // File attachment elements
+  const fileInput = makeEl('file-input');
+  fileInput.click = jest.fn();
+  fileInput.files = [];
+  const filePreview = makeEl('file-preview');
+  filePreview.innerHTML = '';
+  filePreview.children = [];
+  makeEl('attach-btn');
+  makeEl('resize-status');
+
   return {
     elements,
     listeners,
@@ -61,11 +71,13 @@ function loadApp(overrides) {
     auth: mockAuth,
     from: mockFrom,
   });
+  const mockUploadCapture = jest.fn().mockResolvedValue({ captureId: 'cap-123', resizedFiles: [] });
 
   const dom = buildMockDOM();
   const ctx = {
     CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
     supabase: { createClient: mockCreateClient },
+    uploadCapture: mockUploadCapture,
     document: dom,
     window: { location: { origin: 'https://example.com', pathname: '/brainy/' } },
     navigator: { onLine: true },
@@ -76,7 +88,7 @@ function loadApp(overrides) {
   vm.createContext(ctx);
   vm.runInContext(appCode, ctx);
 
-  return { ctx, dom, mockCreateClient, mockAuth, mockFrom, mockInsert, mockSignIn, mockSignOut, authCallback };
+  return { ctx, dom, mockCreateClient, mockAuth, mockFrom, mockInsert, mockUploadCapture, mockSignIn, mockSignOut, authCallback };
 }
 
 describe('app initialization', () => {
@@ -106,8 +118,8 @@ describe('app initialization', () => {
 });
 
 describe('form submission', () => {
-  test('inserts capture with user_id into brainy_captures', async () => {
-    const { dom, mockFrom, mockInsert } = loadApp();
+  test('calls uploadCapture with db, userId, text, and pendingFiles', async () => {
+    const { dom, mockUploadCapture } = loadApp();
     dom.elements['capture-text'].value = 'test thought';
 
     const submitHandler = dom.listeners['capture-form:submit'];
@@ -115,10 +127,15 @@ describe('form submission', () => {
     submitHandler(mockEvent);
 
     await flushPromises();
+    await flushPromises();
 
     expect(mockEvent.preventDefault).toHaveBeenCalled();
-    expect(mockFrom).toHaveBeenCalledWith('brainy_captures');
-    expect(mockInsert).toHaveBeenCalledWith({ text: 'test thought', user_id: 'test-user-id' });
+    expect(mockUploadCapture).toHaveBeenCalledWith(
+      expect.anything(), // db client
+      'test-user-id',
+      'test thought',
+      [], // no pending files
+    );
   });
 
   test('clears textarea on successful submit', async () => {
@@ -133,8 +150,8 @@ describe('form submission', () => {
     expect(dom.elements['capture-text'].value).toBe('');
   });
 
-  test('does not insert when user is not authenticated', async () => {
-    const { dom, mockFrom, mockAuth } = loadApp();
+  test('does not submit when user is not authenticated', async () => {
+    const { dom, mockUploadCapture, mockAuth } = loadApp();
     mockAuth.getUser.mockResolvedValue({ data: { user: null } });
     dom.elements['capture-text'].value = 'test thought';
 
@@ -142,23 +159,23 @@ describe('form submission', () => {
     submitHandler({ preventDefault: jest.fn() });
 
     await flushPromises();
-    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockUploadCapture).not.toHaveBeenCalled();
   });
 
-  test('does not submit empty text', async () => {
-    const { dom, mockFrom } = loadApp();
+  test('does not submit empty text with no files', async () => {
+    const { dom, mockUploadCapture } = loadApp();
     dom.elements['capture-text'].value = '   ';
 
     const submitHandler = dom.listeners['capture-form:submit'];
     submitHandler({ preventDefault: jest.fn() });
 
     await flushPromises();
-    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockUploadCapture).not.toHaveBeenCalled();
   });
 
-  test('shows error status when insert fails', async () => {
-    const { dom, mockInsert } = loadApp();
-    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'RLS violation' } }));
+  test('shows error status when uploadCapture fails', async () => {
+    const { dom, mockUploadCapture } = loadApp();
+    mockUploadCapture.mockRejectedValue(new Error('Upload failed: quota exceeded'));
     dom.elements['capture-text'].value = 'test thought';
 
     const submitHandler = dom.listeners['capture-form:submit'];
@@ -166,26 +183,12 @@ describe('form submission', () => {
 
     await flushPromises();
     await flushPromises();
-    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: RLS violation');
-    expect(dom.elements['capture-text'].value).toBe('test thought');
-  });
-
-  test('shows error status when insert rejects', async () => {
-    const { dom, mockInsert } = loadApp();
-    mockInsert.mockReturnValue(Promise.reject(new Error('network on insert')));
-    dom.elements['capture-text'].value = 'test thought';
-
-    const submitHandler = dom.listeners['capture-form:submit'];
-    submitHandler({ preventDefault: jest.fn() });
-
-    await flushPromises();
-    await flushPromises();
-    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network on insert');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: Upload failed: quota exceeded');
     expect(dom.elements['capture-text'].value).toBe('test thought');
   });
 
   test('shows error status when getUser rejects', async () => {
-    const { dom, mockAuth, mockFrom } = loadApp();
+    const { dom, mockAuth, mockUploadCapture } = loadApp();
     mockAuth.getUser.mockRejectedValue(new Error('network'));
     dom.elements['capture-text'].value = 'test thought';
 
@@ -193,8 +196,8 @@ describe('form submission', () => {
     submitHandler({ preventDefault: jest.fn() });
 
     await flushPromises();
-    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network');
-    expect(mockFrom).not.toHaveBeenCalled();
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: check your internet connection');
+    expect(mockUploadCapture).not.toHaveBeenCalled();
   });
 });
 
@@ -222,6 +225,17 @@ describe('capture feedback', () => {
 
     expect(dom.elements['capture-btn'].disabled).toBe(true);
     expect(dom.elements['capture-btn'].textContent).toBe('Capturing...');
+  });
+
+  test('button shows Uploading when files are pending', () => {
+    const { dom, ctx } = loadApp();
+    dom.elements['capture-text'].value = 'test thought';
+    ctx._pendingFiles = [{ name: 'photo.jpg', type: 'image/jpeg', size: 5000 }];
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    expect(dom.elements['capture-btn'].textContent).toBe('Uploading...');
   });
 
   test('button shows success state after capture', async () => {
@@ -255,9 +269,9 @@ describe('capture feedback', () => {
     expect(dom.elements['capture-btn'].className).toBe('');
   });
 
-  test('shows error message on insert failure', async () => {
-    const { dom, mockInsert } = loadApp();
-    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'RLS violation' } }));
+  test('shows error message on upload failure', async () => {
+    const { dom, mockUploadCapture } = loadApp();
+    mockUploadCapture.mockRejectedValue(new Error('Upload failed: quota exceeded'));
     dom.elements['capture-text'].value = 'test thought';
 
     const submitHandler = dom.listeners['capture-form:submit'];
@@ -265,27 +279,13 @@ describe('capture feedback', () => {
 
     await flushPromises();
     await flushPromises();
-    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: RLS violation');
+    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: Upload failed: quota exceeded');
     expect(dom.elements['status-msg'].className).toBe('status-error');
   });
 
-  test('shows error message on network failure', async () => {
-    const { dom, mockInsert } = loadApp();
-    mockInsert.mockReturnValue(Promise.reject(new Error('network error')));
-    dom.elements['capture-text'].value = 'test thought';
-
-    const submitHandler = dom.listeners['capture-form:submit'];
-    submitHandler({ preventDefault: jest.fn() });
-
-    await flushPromises();
-    await flushPromises();
-    expect(dom.elements['status-msg'].textContent).toBe('Capture failed: network error');
-    expect(dom.elements['status-msg'].className).toBe('status-error');
-  });
-
-  test('button re-enables on insert failure', async () => {
-    const { dom, mockInsert } = loadApp();
-    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'fail' } }));
+  test('button re-enables on upload failure', async () => {
+    const { dom, mockUploadCapture } = loadApp();
+    mockUploadCapture.mockRejectedValue(new Error('fail'));
     dom.elements['capture-text'].value = 'test thought';
 
     const submitHandler = dom.listeners['capture-form:submit'];
@@ -325,7 +325,7 @@ describe('capture feedback', () => {
     expect(dom.elements['status-msg'].textContent).toBe('Capture failed: no internet connection');
   });
 
-  test('button not disabled for empty text', () => {
+  test('button not disabled for empty text with no files', () => {
     const { dom } = loadApp();
     dom.elements['capture-text'].value = '   ';
 
@@ -347,6 +347,58 @@ describe('capture feedback', () => {
     expect(dom.elements['capture-btn'].disabled).toBe(false);
     expect(dom.elements['capture-btn'].textContent).toBe('Capture');
   });
+
+  test('clears pendingFiles and preview on success', async () => {
+    const { dom, ctx } = loadApp();
+    dom.elements['capture-text'].value = 'test thought';
+    ctx._pendingFiles = [{ name: 'photo.jpg', type: 'image/jpeg', size: 5000 }];
+    dom.elements['file-preview'].innerHTML = '<div>photo.jpg</div>';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(ctx._pendingFiles.length).toBe(0);
+    expect(dom.elements['file-preview'].innerHTML).toBe('');
+  });
+
+  test('preserves pendingFiles on failure', async () => {
+    const { dom, ctx, mockUploadCapture } = loadApp();
+    mockUploadCapture.mockRejectedValue(new Error('fail'));
+    dom.elements['capture-text'].value = 'test thought';
+    ctx._pendingFiles = [{ name: 'photo.jpg', type: 'image/jpeg', size: 5000 }];
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(ctx._pendingFiles.length).toBe(1);
+  });
+
+  test('shows resize notification when files were resized', async () => {
+    const { dom, ctx, mockUploadCapture } = loadApp();
+    mockUploadCapture.mockResolvedValue({
+      captureId: 'cap-123',
+      resizedFiles: [
+        { name: 'big.jpg', wasResized: true },
+        { name: 'small.jpg', wasResized: false },
+      ],
+    });
+    dom.elements['capture-text'].value = 'test';
+    ctx._pendingFiles = [
+      { name: 'big.jpg', type: 'image/jpeg', size: 8000000 },
+      { name: 'small.jpg', type: 'image/jpeg', size: 1000 },
+    ];
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(dom.elements['resize-status'].textContent).toContain('big.jpg');
+  });
 });
 
 describe('logout', () => {
@@ -363,5 +415,70 @@ describe('logout', () => {
     // Verified by HTML structure — logout only visible when authenticated
     const { dom } = loadApp();
     expect(dom.listeners['logout-btn:click']).toBeDefined();
+  });
+});
+
+describe('file attachment UI', () => {
+  test('attach button triggers file input click', () => {
+    const { dom } = loadApp();
+
+    const clickHandler = dom.listeners['attach-btn:click'];
+    clickHandler();
+
+    expect(dom.elements['file-input'].click).toHaveBeenCalled();
+  });
+
+  test('file preview shows filename after file selection', () => {
+    const { dom } = loadApp();
+    dom.elements['file-input'].files = [
+      { name: 'photo.jpg', type: 'image/jpeg', size: 5000 },
+    ];
+
+    const changeHandler = dom.listeners['file-input:change'];
+    changeHandler();
+
+    expect(dom.elements['file-preview'].innerHTML).toContain('photo.jpg');
+  });
+
+  test('remove button clears file from pending list', () => {
+    const { dom, ctx } = loadApp();
+    dom.elements['file-input'].files = [
+      { name: 'a.jpg', type: 'image/jpeg', size: 1000 },
+      { name: 'b.jpg', type: 'image/jpeg', size: 2000 },
+    ];
+
+    const changeHandler = dom.listeners['file-input:change'];
+    changeHandler();
+
+    // Simulate clicking remove on first file
+    expect(ctx._pendingFiles.length).toBe(2);
+    ctx._removeFile(0);
+    expect(ctx._pendingFiles.length).toBe(1);
+    expect(ctx._pendingFiles[0].name).toBe('b.jpg');
+  });
+
+  test('empty text and no files is rejected', async () => {
+    const { dom, mockUploadCapture } = loadApp();
+    dom.elements['capture-text'].value = '   ';
+    // No files attached (pendingFiles is empty by default)
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(mockUploadCapture).not.toHaveBeenCalled();
+  });
+
+  test('file-only capture is allowed when text is empty', async () => {
+    const { dom, ctx, mockAuth } = loadApp();
+    dom.elements['capture-text'].value = '';
+    ctx._pendingFiles = [{ name: 'photo.jpg', type: 'image/jpeg', size: 5000 }];
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    // Should have proceeded past the guard (getUser was called)
+    expect(mockAuth.getUser).toHaveBeenCalled();
   });
 });

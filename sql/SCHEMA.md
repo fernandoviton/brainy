@@ -64,6 +64,26 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 
 
 ┌──────────────────────────┐  ┌───────────────────────────────┐
+│    brainy_captures       │  │    brainy_capture_media        │
+│──────────────────────────│  │───────────────────────────────│
+│ *id         uuid PK      │  │ *id           uuid PK          │
+│  user_id    uuid FK NN   │  │  user_id      uuid FK NN       │
+│  text       text         │  │  capture_id   uuid FK NN       │
+│  processed_at tstz       │  │  filename     text NN          │
+│  created_at  tstz        │  │  content_type text             │
+│                          │  │  storage_path text NN ──────┐  │
+│  IDX(user_id,            │  │  created_at   tstz          │  │
+│      processed_at)       │  │                             │  │
+└────────────┬─────────────┘  │  IDX(capture_id)            │  │
+             │ capture_id FK  └─────────────────────────────│──┘
+             │ (cascade del)                                │
+             └────────────────────────────────────────┐     │
+                                                      ▼     │
+                                                brainy_files │
+                                                  (bucket)◀──┘
+
+
+┌──────────────────────────┐  ┌───────────────────────────────┐
 │  brainy_archive_entries  │  │  brainy_archive_summaries     │
 │──────────────────────────│  │───────────────────────────────│
 │ *id           uuid PK    │  │ *id          uuid PK          │
@@ -93,6 +113,9 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 | `auth.users`            | `brainy_archive_summaries`       | `user_id`      | —         |
 | `brainy_todos`          | `brainy_todo_collateral`         | `todo_id`      | CASCADE   |
 | `brainy_knowledge`      | `brainy_knowledge_attachments`   | `knowledge_id` | CASCADE   |
+| `auth.users`            | `brainy_captures`                | `user_id`      | —         |
+| `auth.users`            | `brainy_capture_media`           | `user_id`      | —         |
+| `brainy_captures`       | `brainy_capture_media`           | `capture_id`   | CASCADE   |
 
 *Note: `brainy_goals` was intentionally removed — goals are not tracked in the database.*
 
@@ -105,6 +128,8 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 | `brainy_todos`   | `idx_brainy_todos_scheduled`         | `(scheduled_date)` WHERE status='scheduled'|
 | `brainy_knowledge` | `idx_brainy_knowledge_user_path`   | `(user_id, path text_pattern_ops)`         |
 | `brainy_knowledge_attachments` | `idx_brainy_knowledge_attachments_knowledge` | `(knowledge_id)` |
+| `brainy_captures` | `idx_brainy_captures_user_processed` | `(user_id, processed_at)` |
+| `brainy_capture_media` | `idx_brainy_capture_media_capture` | `(capture_id)` |
 | `brainy_archive_entries` | `idx_brainy_archive_entries_user_month` | `(user_id, year_month)` |
 
 ## Triggers

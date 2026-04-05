@@ -23,7 +23,13 @@
     <div id="capture-section" style="display:none">
       <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
       <form id="capture-form">
-        <textarea id="capture-text" placeholder="What's on your mind?" rows="4" required></textarea>
+        <textarea id="capture-text" placeholder="What's on your mind?" rows="4"></textarea>
+        <div id="attach-area">
+          <input type="file" id="file-input" accept="*/*" multiple style="display:none">
+          <button type="button" id="attach-btn">Attach Photo/File</button>
+          <div id="file-preview"></div>
+          <div id="resize-status"></div>
+        </div>
         <button id="capture-btn" type="submit">Capture</button>
       </form>
       <div id="status-msg"></div>
@@ -33,6 +39,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.local.js"></script>
   <script src="config.js"></script>
+  <script src="resize.js"></script>
+  <script src="upload.js"></script>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

@@ -102,3 +102,56 @@ button {
   background: #f8d7da;
   color: #721c24;
 }
+
+.status-info {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+#attach-area {
+  margin-bottom: 0.75rem;
+}
+
+#attach-btn {
+  background: #e9ecef;
+  color: #495057;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  width: auto;
+  display: inline-block;
+}
+
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.file-preview-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.remove-file {
+  background: transparent;
+  color: #999;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.3rem;
+  width: auto;
+  display: inline;
+}
+
+#resize-status {
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
