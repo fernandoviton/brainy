@@ -54,6 +54,14 @@ node scripts/google-login.js
 
 This opens your browser for Google sign-in, then prints a `SUPABASE_REFRESH_TOKEN`. Add it to your `.env` file.
 
+To re-authenticate later (e.g., if the refresh token expires or is revoked):
+
+```bash
+node scripts/refresh-token.js
+```
+
+This opens your browser, signs you in, and updates `.env` automatically.
+
 ### 6. Verify
 
 ```bash
