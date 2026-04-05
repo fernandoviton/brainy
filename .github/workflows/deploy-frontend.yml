@@ -42,9 +42,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Inject Supabase config
-        run: |
-          sed -i "s|CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || ''|CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || '${{ vars.SUPABASE_URL }}'|" frontend/config.js
-          sed -i "s|CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || ''|CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || '${{ vars.SUPABASE_PUBLISHABLE_KEY }}'|" frontend/config.js
+        run: node scripts/inject-config.js frontend/config.js
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Validate config injection
         run: node scripts/validate-config.js frontend/config.js
