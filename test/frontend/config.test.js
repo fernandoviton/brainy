@@ -23,6 +23,18 @@ describe('frontend config', () => {
     expect(typeof ctx.CONFIG.SUPABASE_URL).toBe('string');
     expect(typeof ctx.CONFIG.SUPABASE_PUBLISHABLE_KEY).toBe('string');
   });
+
+  test('config.js sed injection pattern is intact', () => {
+    // The deploy workflow uses sed to replace these exact patterns.
+    // If someone refactors config.js and breaks the pattern, deploys will
+    // silently ship empty config, causing "supabaseUrl is required" in prod.
+    const raw = fs.readFileSync(
+      path.join(__dirname, '../../frontend/config.js'),
+      'utf8'
+    );
+    expect(raw).toContain("CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || ''");
+    expect(raw).toContain("CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || ''");
+  });
 });
 
 describe('Supabase client initialization', () => {
