@@ -1,4 +1,4 @@
-name: Deploy PWA to GitHub Pages
+name: Deploy Frontend to GitHub Pages
 
 on:
   push:
@@ -26,8 +26,8 @@ jobs:
 
       - name: Inject Supabase config
         run: |
-          sed -i "s|SUPABASE_URL: ''|SUPABASE_URL: '${{ secrets.SUPABASE_URL }}'|" frontend/config.js
-          sed -i "s|SUPABASE_PUBLISHABLE_KEY: ''|SUPABASE_PUBLISHABLE_KEY: '${{ secrets.SUPABASE_PUBLISHABLE_KEY }}'|" frontend/config.js
+          sed -i "s|SUPABASE_URL: ''|SUPABASE_URL: '${{ vars.SUPABASE_URL }}'|" frontend/config.js
+          sed -i "s|SUPABASE_PUBLISHABLE_KEY: ''|SUPABASE_PUBLISHABLE_KEY: '${{ vars.SUPABASE_PUBLISHABLE_KEY }}'|" frontend/config.js
 
       - name: Generate version.js
         run: |
