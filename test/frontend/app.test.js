@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+const flushPromises = () => new Promise(process.nextTick);
+
 const appCode = fs.readFileSync(path.join(__dirname, '../../frontend/app.js'), 'utf8');
 
 function buildMockDOM() {
@@ -30,7 +32,6 @@ function buildMockDOM() {
     elements,
     listeners,
     getElementById: jest.fn((id) => elements[id]),
-    querySelector: jest.fn(() => ({ addEventListener: jest.fn(), style: {} })),
   };
 }
 
@@ -38,10 +39,14 @@ function loadApp(overrides) {
   const mockInsert = jest.fn().mockReturnValue(Promise.resolve({ error: null }));
   const mockFrom = jest.fn().mockReturnValue({ insert: mockInsert });
   const mockSignIn = jest.fn();
+  const mockGetUser = jest.fn().mockResolvedValue({
+    data: { user: { id: 'test-user-id' } },
+  });
   let authCallback;
   const mockAuth = {
     onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
     signInWithOAuth: mockSignIn,
+    getUser: mockGetUser,
   };
   const mockCreateClient = jest.fn().mockReturnValue({
     auth: mockAuth,
@@ -90,7 +95,7 @@ describe('app initialization', () => {
 });
 
 describe('form submission', () => {
-  test('inserts capture into brainy_captures', async () => {
+  test('inserts capture with user_id into brainy_captures', async () => {
     const { dom, mockFrom, mockInsert } = loadApp();
     dom.elements['capture-text'].value = 'test thought';
 
@@ -98,9 +103,11 @@ describe('form submission', () => {
     const mockEvent = { preventDefault: jest.fn() };
     submitHandler(mockEvent);
 
+    await flushPromises();
+
     expect(mockEvent.preventDefault).toHaveBeenCalled();
     expect(mockFrom).toHaveBeenCalledWith('brainy_captures');
-    expect(mockInsert).toHaveBeenCalledWith({ text: 'test thought' });
+    expect(mockInsert).toHaveBeenCalledWith({ text: 'test thought', user_id: 'test-user-id' });
   });
 
   test('clears textarea on successful submit', async () => {
@@ -110,18 +117,72 @@ describe('form submission', () => {
     const submitHandler = dom.listeners['capture-form:submit'];
     submitHandler({ preventDefault: jest.fn() });
 
-    // Wait for the promise to resolve
-    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
+    await flushPromises();
     expect(dom.elements['capture-text'].value).toBe('');
   });
 
-  test('does not submit empty text', () => {
+  test('does not insert when user is not authenticated', async () => {
+    const { dom, mockFrom, mockAuth } = loadApp();
+    mockAuth.getUser.mockResolvedValue({ data: { user: null } });
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  test('does not submit empty text', async () => {
     const { dom, mockFrom } = loadApp();
     dom.elements['capture-text'].value = '   ';
 
     const submitHandler = dom.listeners['capture-form:submit'];
     submitHandler({ preventDefault: jest.fn() });
 
+    await flushPromises();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  test('logs error when insert fails', async () => {
+    const { dom, ctx, mockInsert } = loadApp();
+    mockInsert.mockReturnValue(Promise.resolve({ error: { message: 'RLS violation' } }));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'RLS violation');
+    expect(dom.elements['capture-text'].value).toBe('test thought');
+  });
+
+  test('logs error when insert rejects', async () => {
+    const { dom, ctx, mockInsert } = loadApp();
+    mockInsert.mockReturnValue(Promise.reject(new Error('network on insert')));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    await flushPromises();
+    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'network on insert');
+    expect(dom.elements['capture-text'].value).toBe('test thought');
+  });
+
+  test('logs error when getUser rejects', async () => {
+    const { dom, ctx, mockAuth, mockFrom } = loadApp();
+    mockAuth.getUser.mockRejectedValue(new Error('network'));
+    dom.elements['capture-text'].value = 'test thought';
+
+    const submitHandler = dom.listeners['capture-form:submit'];
+    submitHandler({ preventDefault: jest.fn() });
+
+    await flushPromises();
+    expect(ctx.console.error).toHaveBeenCalledWith('Capture failed:', 'network');
     expect(mockFrom).not.toHaveBeenCalled();
   });
 });

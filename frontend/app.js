@@ -29,13 +29,18 @@ captureForm.addEventListener('submit', function (e) {
   var text = document.getElementById('capture-text').value.trim();
   if (!text) return;
 
-  db.from('brainy_captures')
-    .insert({ text: text })
-    .then(function (result) {
-      if (result.error) {
-        console.error('Capture failed:', result.error.message);
-        return;
-      }
-      document.getElementById('capture-text').value = '';
-    });
+  db.auth.getUser().then(function (userResult) {
+    if (!userResult.data.user) return;
+    return db.from('brainy_captures')
+      .insert({ text: text, user_id: userResult.data.user.id })
+      .then(function (result) {
+        if (result.error) {
+          console.error('Capture failed:', result.error.message);
+          return;
+        }
+        document.getElementById('capture-text').value = '';
+      });
+  }).catch(function (err) {
+    console.error('Capture failed:', err.message);
+  });
 });

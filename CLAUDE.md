@@ -71,6 +71,10 @@ When a TODO is completed:
    ```
 3. **Keep everything** — no retention policy, all history preserved
 
+## Development Practice
+
+- **TDD first**: Write or update tests before writing the fix/feature. Verify the test fails without the change, then implement the change and confirm the test passes.
+
 ## Naming Conventions
 
 - TODO names: `kebab-case` (e.g., `build-auth-system`)
