@@ -1,136 +1,260 @@
-* {
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+
+/* ── Design tokens ─────────────────────────────── */
+:root {
+  --cream:       #F7F3ED;
+  --cream-dark:  #EDE7DC;
+  --ink:         #2C2418;
+  --ink-light:   #6B5D4F;
+  --terracotta:  #C4652A;
+  --terra-glow:  #D4783F;
+  --sage:        #8B9A7E;
+  --sage-light:  #A8B89C;
+  --paper-white: #FFFDF9;
+  --border:      #D8CFBF;
+  --border-light:#E8E1D5;
+  --shadow:      rgba(44, 36, 24, 0.08);
+  --shadow-md:   rgba(44, 36, 24, 0.12);
+
+  --font-display: 'Libre Baskerville', 'Georgia', serif;
+  --font-body:    'DM Sans', 'Segoe UI', sans-serif;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Reset ─────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* ── Page ──────────────────────────────────────── */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #f5f5f5;
-  color: #222;
-  padding: 1rem;
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--ink);
+  min-height: 100dvh;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle paper grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 main {
-  max-width: 480px;
+  position: relative;
+  z-index: 1;
+  max-width: 440px;
   margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  animation: fadeUp 0.6s var(--ease-out) both;
 }
 
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header ────────────────────────────────────── */
 h1 {
-  font-size: 1.4rem;
-  margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   text-align: center;
+  margin-bottom: 1.75rem;
+  color: var(--ink);
 }
 
+h1::after {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 2px;
+  background: var(--terracotta);
+  margin: 0.6rem auto 0;
+  border-radius: 1px;
+}
+
+/* ── Auth section ──────────────────────────────── */
 #auth-section {
   text-align: center;
+  animation: fadeUp 0.6s 0.15s var(--ease-out) both;
 }
 
 #auth-section p {
-  margin-bottom: 1rem;
-  color: #555;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--ink-light);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
 }
 
+/* ── Buttons (base) ────────────────────────────── */
 button {
   display: block;
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.85rem 1.25rem;
   border: none;
-  border-radius: 6px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.25s var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
 }
 
+button:active {
+  transform: scale(0.97);
+}
+
+/* ── Login button ──────────────────────────────── */
 #login-btn {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ink);
+  color: var(--cream);
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 8px var(--shadow-md), 0 1px 2px var(--shadow);
 }
 
-#capture-text {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
-  resize: vertical;
-  margin-bottom: 0.75rem;
-  font-family: inherit;
+#login-btn:hover {
+  background: #3D3225;
+  box-shadow: 0 4px 16px var(--shadow-md);
+  transform: translateY(-1px);
 }
 
-#capture-form button {
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.3s ease;
+#login-btn:active {
+  transform: translateY(0) scale(0.98);
 }
 
-#capture-form button.btn-success {
-  background: #28a745;
+/* ── Capture section ───────────────────────────── */
+#capture-section {
+  animation: fadeUp 0.5s 0.1s var(--ease-out) both;
 }
 
+/* ── Top bar / sign out ────────────────────────── */
 #top-bar {
-  text-align: right;
-  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
 }
 
 #logout-btn {
   background: transparent;
-  color: #888;
-  font-size: 0.8rem;
+  color: var(--ink-light);
+  font-size: 0.78rem;
+  font-weight: 500;
   width: auto;
-  display: inline;
-  padding: 0.25rem 0.5rem;
-}
-
-#status-msg {
-  text-align: center;
-  padding: 0.5rem;
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
   border-radius: 6px;
-  margin-top: 0.75rem;
-  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-#status-msg:empty {
-  display: none;
+#logout-btn:hover {
+  color: var(--ink);
+  background: var(--cream-dark);
 }
 
-.status-success {
-  background: #d4edda;
-  color: #155724;
+/* ── Textarea ──────────────────────────────────── */
+#capture-text {
+  width: 100%;
+  padding: 1rem 1.1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--paper-white);
+  resize: vertical;
+  min-height: 120px;
+  margin-bottom: 0.85rem;
+  box-shadow: inset 0 1px 3px var(--shadow);
+  transition: border-color 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
 }
 
-.status-error {
-  background: #f8d7da;
-  color: #721c24;
+#capture-text::placeholder {
+  color: var(--sage);
+  font-style: italic;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
 }
 
-.status-info {
-  background: #d1ecf1;
-  color: #0c5460;
+#capture-text:focus {
+  outline: none;
+  border-color: var(--terracotta);
+  box-shadow: inset 0 1px 3px var(--shadow), 0 0 0 3px rgba(196, 101, 42, 0.1);
 }
 
+/* ── Attach area ───────────────────────────────── */
 #attach-area {
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 #attach-btn {
-  background: #e9ecef;
-  color: #495057;
-  font-size: 0.9rem;
-  padding: 0.5rem 0.75rem;
+  background: var(--paper-white);
+  color: var(--ink-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.55rem 1rem;
   width: auto;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
 }
 
+#attach-btn::before {
+  content: '+';
+  font-size: 1.1rem;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--sage);
+}
+
+#attach-btn:hover {
+  border-color: var(--sage);
+  color: var(--ink);
+  background: var(--cream);
+}
+
+#attach-btn:active {
+  transform: scale(0.97);
+}
+
+/* ── File preview items ────────────────────────── */
 .file-preview-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0.4rem 0.6rem;
+  background: var(--paper-white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
   margin-top: 0.5rem;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--ink-light);
+  animation: slideIn 0.3s var(--ease-spring) both;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 .file-preview-item span {
@@ -138,20 +262,128 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  font-weight: 500;
 }
 
 .remove-file {
   background: transparent;
-  color: #999;
+  color: var(--sage);
   border: none;
   font-size: 1.1rem;
   cursor: pointer;
-  padding: 0 0.3rem;
+  padding: 0 0.35rem;
   width: auto;
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
 }
 
+.remove-file:hover {
+  color: var(--terracotta);
+  background: rgba(196, 101, 42, 0.08);
+}
+
+/* ── Resize status ─────────────────────────────── */
 #resize-status {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   margin-top: 0.4rem;
+  color: var(--sage);
+  font-style: italic;
+}
+
+/* ── Capture button ────────────────────────────── */
+#capture-btn {
+  background: var(--terracotta);
+  color: var(--cream);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  padding: 0.9rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(196, 101, 42, 0.2), 0 1px 2px rgba(196, 101, 42, 0.1);
+  transition: all 0.25s var(--ease-out);
+}
+
+#capture-btn:hover {
+  background: var(--terra-glow);
+  box-shadow: 0 4px 16px rgba(196, 101, 42, 0.25);
+  transform: translateY(-1px);
+}
+
+#capture-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+#capture-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+#capture-form button.btn-success {
+  background: var(--sage);
+  box-shadow: 0 2px 8px rgba(139, 154, 126, 0.25);
+  animation: successPulse 0.4s var(--ease-spring);
+}
+
+@keyframes successPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* ── Status messages ───────────────────────────── */
+#status-msg {
+  text-align: center;
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  animation: fadeUp 0.3s var(--ease-out) both;
+}
+
+#status-msg:empty {
+  display: none;
+}
+
+.status-success {
+  background: rgba(139, 154, 126, 0.15);
+  color: #4A6340;
+  border: 1px solid rgba(139, 154, 126, 0.25);
+}
+
+.status-error {
+  background: rgba(196, 101, 42, 0.1);
+  color: #A04420;
+  border: 1px solid rgba(196, 101, 42, 0.15);
+}
+
+.status-info {
+  background: rgba(107, 93, 79, 0.08);
+  color: var(--ink-light);
+  border: 1px solid var(--border-light);
+}
+
+/* ── Safe area for PWA (notch / home bar) ──────── */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── Selection color ───────────────────────────── */
+::selection {
+  background: rgba(196, 101, 42, 0.18);
+  color: var(--ink);
+}
+
+/* ── Focus visible for keyboard nav ────────────── */
+:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
 }
