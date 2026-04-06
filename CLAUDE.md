@@ -37,8 +37,9 @@ todo create --name <name> --summary <summary> --status <status> [--priority <p>]
 todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin] [--blocked-by <name>]
 todo archive <name> --summary-text <text> --completion-date <date>
 
-capture list [--all] [--format json]
-capture get <id> [--format json]
+capture list [--all] [--format json]   # json includes media[] on each capture
+capture get <id> [--format json]       # always includes media[]
+capture media <capture_id> [--format json]  # signed download URLs for media (1hr expiry)
 capture process <id>
 
 knowledge list [--prefix <path>] [--format json]

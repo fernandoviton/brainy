@@ -42,13 +42,28 @@ function buildChain() {
   return chain;
 }
 
+let _mockSignedUrls = { data: [], error: null };
+
+function setMockSignedUrls(data, error = null) {
+  _mockSignedUrls = { data, error };
+}
+
+const mockStorageFrom = jest.fn(() => ({
+  createSignedUrls: jest.fn(() => Promise.resolve(_mockSignedUrls)),
+}));
+
 const supabase = {
   from: jest.fn(() => buildChain()),
+  storage: { from: mockStorageFrom },
 };
 
 function resetMock() {
   _mockResult = { data: [], error: null };
+  _mockSignedUrls = { data: [], error: null };
   supabase.from.mockImplementation(() => buildChain());
+  supabase.storage.from.mockImplementation(() => ({
+    createSignedUrls: jest.fn(() => Promise.resolve(_mockSignedUrls)),
+  }));
 }
 
 const login = jest.fn().mockResolvedValue({ id: 'test-user-id' });
@@ -59,5 +74,6 @@ module.exports = {
   setMockResult,
   setMockError,
   setMockSingle,
+  setMockSignedUrls,
   resetMock,
 };

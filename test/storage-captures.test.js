@@ -80,6 +80,65 @@ describe('getCapture', () => {
   });
 });
 
+describe('listCaptureMedia', () => {
+  test('fetches media for given capture IDs', async () => {
+    const media = [
+      { id: 'm1', capture_id: 'aaa', filename: 'photo.jpg', content_type: 'image/jpeg', storage_path: 'path/photo.jpg', created_at: '2026-04-04T10:00:00Z' },
+      { id: 'm2', capture_id: 'bbb', filename: 'doc.pdf', content_type: 'application/pdf', storage_path: 'path/doc.pdf', created_at: '2026-04-04T11:00:00Z' },
+    ];
+    mockSupabase.setMockResult(media);
+
+    const result = await storage.listCaptureMedia(['aaa', 'bbb']);
+
+    const from = mockSupabase.supabase.from;
+    expect(from).toHaveBeenCalledWith('brainy_capture_media');
+
+    const chain = from.mock.results[0].value;
+    expect(chain.eq).toHaveBeenCalledWith('user_id', 'test-user-id');
+    expect(chain.in).toHaveBeenCalledWith('capture_id', ['aaa', 'bbb']);
+    expect(result).toEqual(media);
+  });
+
+  test('returns empty array for empty input without querying', async () => {
+    const result = await storage.listCaptureMedia([]);
+
+    expect(mockSupabase.supabase.from).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+});
+
+describe('createSignedMediaUrls', () => {
+  test('generates signed URLs for given storage paths', async () => {
+    mockSupabase.setMockSignedUrls([
+      { path: 'uid/captures/photo.jpg', signedUrl: 'https://example.com/signed/photo.jpg' },
+      { path: 'uid/captures/doc.pdf', signedUrl: 'https://example.com/signed/doc.pdf' },
+    ]);
+
+    const result = await storage.createSignedMediaUrls([
+      'uid/captures/photo.jpg',
+      'uid/captures/doc.pdf',
+    ]);
+
+    expect(mockSupabase.supabase.storage.from).toHaveBeenCalledWith('brainy_files');
+    const bucket = mockSupabase.supabase.storage.from.mock.results[0].value;
+    expect(bucket.createSignedUrls).toHaveBeenCalledWith(
+      ['uid/captures/photo.jpg', 'uid/captures/doc.pdf'],
+      3600
+    );
+    expect(result).toEqual([
+      { path: 'uid/captures/photo.jpg', signedUrl: 'https://example.com/signed/photo.jpg' },
+      { path: 'uid/captures/doc.pdf', signedUrl: 'https://example.com/signed/doc.pdf' },
+    ]);
+  });
+
+  test('returns empty array for empty input without calling storage', async () => {
+    const result = await storage.createSignedMediaUrls([]);
+
+    expect(mockSupabase.supabase.storage.from).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+});
+
 describe('processCapture', () => {
   test('sets processed_at', async () => {
     mockSupabase.setMockResult({ id: 'aaa', processed_at: '2026-04-04T12:00:00Z' });

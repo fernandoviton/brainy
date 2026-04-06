@@ -103,6 +103,31 @@ node backend/cli.js todo archive my-task --summary-text "Done, learned Y"
 node backend/cli.js todo delete my-task
 ```
 
+### Captures
+
+```bash
+# List unprocessed captures
+node backend/cli.js capture list
+
+# List all captures (including processed)
+node backend/cli.js capture list --all
+
+# JSON output (includes media[] array with filenames, content types, storage paths)
+node backend/cli.js capture list --format json
+
+# Get full details on a capture (always includes media[])
+node backend/cli.js capture get <id>
+
+# Get signed download URLs for a capture's media (1hr expiry)
+node backend/cli.js capture media <capture_id>
+
+# JSON output for media URLs
+node backend/cli.js capture media <capture_id> --format json
+
+# Mark a capture as processed
+node backend/cli.js capture process <id>
+```
+
 ### Knowledge
 
 ```bash

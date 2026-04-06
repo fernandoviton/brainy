@@ -11,6 +11,7 @@
  *   node backend/cli.js todo archive <name> [--summary-text <text>] [--completion-date <d>]
  *   node backend/cli.js capture list [--all] [--format json]
  *   node backend/cli.js capture get <id> [--format json]
+ *   node backend/cli.js capture media <capture_id> [--format json]
  *   node backend/cli.js capture process <id>
  *   node backend/cli.js knowledge list [--prefix <prefix>] [--format json]
  *   node backend/cli.js knowledge get <path> [--format json]
@@ -19,6 +20,7 @@
  *   node backend/cli.js promote-scheduled
  */
 const { getStorage } = require('./storage');
+const captureService = require('./capture-service');
 
 function parseArgs(argv) {
   const args = {};
@@ -65,7 +67,8 @@ function output(data, format) {
         const short = item.id.substring(0, 8);
         const text = (item.text || '').length > 80 ? item.text.substring(0, 80) + '...' : (item.text || '(empty)');
         const status = item.processed_at ? 'processed' : 'unprocessed';
-        console.log(`- [${short}] ${text} [${status}] ${item.created_at}`);
+        const mediaCount = item.media?.length ? ` [${item.media.length} file${item.media.length !== 1 ? 's' : ''}]` : '';
+        console.log(`- [${short}] ${text} [${status}]${mediaCount} ${item.created_at}`);
       } else if (item.path) {
         console.log(`  ${item.path} (${item.format})`);
       } else {
@@ -168,18 +171,31 @@ async function main() {
     } else if (resource === 'capture') {
       if (action === 'list') {
         const all = args.all || undefined;
-        const result = await storage.listCaptures(all);
+        const result = await captureService.listCapturesWithMedia(all);
         output(result, format);
       } else if (action === 'get') {
         const id = rest[0];
         if (!id) { console.error('Usage: capture get <id>'); process.exit(1); }
-        const result = await storage.getCapture(id);
+        const result = await captureService.getCapture(id);
         if (!result) { console.error(`Capture '${id}' not found`); process.exit(1); }
         output(result, format);
+      } else if (action === 'media') {
+        const id = rest[0];
+        if (!id) { console.error('Usage: capture media <capture_id>'); process.exit(1); }
+        const result = await captureService.getCaptureMediaUrls(id);
+        if (result === null) { console.error(`Capture '${id}' not found`); process.exit(1); }
+        if (!result.length) { console.log('No media attached to this capture.'); return; }
+        if (format === 'json') {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          for (const m of result) {
+            console.log(`${m.filename} (${m.content_type}): ${m.url}`);
+          }
+        }
       } else if (action === 'process') {
         const id = rest[0];
         if (!id) { console.error('Usage: capture process <id>'); process.exit(1); }
-        const result = await storage.processCapture(id);
+        const result = await captureService.processCapture(id);
         console.log(`Processed: ${result.id}`);
       } else {
         console.error(`Unknown capture action: ${action}`);

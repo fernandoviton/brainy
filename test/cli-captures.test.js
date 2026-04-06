@@ -19,6 +19,15 @@ jest.mock('../backend/storage', () => ({
   getStorage: () => mockStorage,
 }));
 
+const mockCaptureService = {
+  listCapturesWithMedia: jest.fn(),
+  getCapture: jest.fn(),
+  processCapture: jest.fn(),
+  getCaptureMediaUrls: jest.fn(),
+};
+
+jest.mock('../backend/capture-service', () => mockCaptureService);
+
 const { main } = require('../backend/cli.js');
 
 function runCLI(args) {
@@ -55,31 +64,65 @@ beforeEach(() => {
 });
 
 describe('capture list', () => {
-  test('calls listCaptures() with unprocessed default', async () => {
-    mockStorage.listCaptures.mockResolvedValue([
-      { id: 'abcd1234-0000-0000-0000-000000000000', text: 'buy milk', processed_at: null, created_at: '2026-04-04T10:00:00Z' },
+  test('calls listCapturesWithMedia() with unprocessed default', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([
+      { id: 'abcd1234-0000-0000-0000-000000000000', text: 'buy milk', processed_at: null, created_at: '2026-04-04T10:00:00Z', media: [] },
     ]);
 
     const { output } = await runCLI(['capture', 'list']);
 
-    expect(mockStorage.listCaptures).toHaveBeenCalledWith(undefined);
+    expect(mockCaptureService.listCapturesWithMedia).toHaveBeenCalledWith(undefined);
     expect(output[0]).toContain('abcd1234');
     expect(output[0]).toContain('buy milk');
     expect(output[0]).toContain('unprocessed');
   });
 
-  test('capture list --all calls listCaptures(true)', async () => {
-    mockStorage.listCaptures.mockResolvedValue([]);
+  test('capture list --all calls listCapturesWithMedia(true)', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([]);
 
     await runCLI(['capture', 'list', '--all']);
 
-    expect(mockStorage.listCaptures).toHaveBeenCalledWith(true);
+    expect(mockCaptureService.listCapturesWithMedia).toHaveBeenCalledWith(true);
+  });
+
+  test('capture list --format json includes media arrays', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([
+      {
+        id: 'abcd1234-0000-0000-0000-000000000000',
+        text: 'buy milk',
+        processed_at: null,
+        created_at: '2026-04-04T10:00:00Z',
+        media: [
+          { id: 'm1', capture_id: 'abcd1234-0000-0000-0000-000000000000', filename: 'photo.jpg', content_type: 'image/jpeg', storage_path: 'p/photo.jpg', created_at: '2026-04-04T10:00:00Z' },
+        ],
+      },
+    ]);
+
+    const { output } = await runCLI(['capture', 'list', '--format', 'json']);
+
+    const parsed = JSON.parse(output.join('\n'));
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].media).toHaveLength(1);
+    expect(parsed[0].media[0].filename).toBe('photo.jpg');
+    expect(parsed[0].media[0].content_type).toBe('image/jpeg');
+  });
+
+  test('capture list text format shows media count when present', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([
+      { id: 'abcd1234-0000-0000-0000-000000000000', text: 'with files', processed_at: null, created_at: '2026-04-04T10:00:00Z', media: [{ filename: 'a.jpg' }, { filename: 'b.png' }] },
+      { id: 'efgh5678-0000-0000-0000-000000000000', text: 'just text', processed_at: null, created_at: '2026-04-04T11:00:00Z', media: [] },
+    ]);
+
+    const { output } = await runCLI(['capture', 'list']);
+
+    expect(output[0]).toContain('[2 files]');
+    expect(output[1]).not.toContain('file');
   });
 });
 
 describe('capture get', () => {
   test('outputs capture details + media', async () => {
-    mockStorage.getCapture.mockResolvedValue({
+    mockCaptureService.getCapture.mockResolvedValue({
       id: 'abcd1234-0000-0000-0000-000000000000',
       text: 'buy milk and eggs',
       processed_at: null,
@@ -89,7 +132,7 @@ describe('capture get', () => {
 
     const { output } = await runCLI(['capture', 'get', 'abcd1234-0000-0000-0000-000000000000']);
 
-    expect(mockStorage.getCapture).toHaveBeenCalledWith('abcd1234-0000-0000-0000-000000000000');
+    expect(mockCaptureService.getCapture).toHaveBeenCalledWith('abcd1234-0000-0000-0000-000000000000');
     expect(output.join('\n')).toContain('buy milk and eggs');
     expect(output.join('\n')).toContain('photo.jpg');
   });
@@ -103,11 +146,61 @@ describe('capture get', () => {
 
 describe('capture process', () => {
   test('marks capture as processed', async () => {
-    mockStorage.processCapture.mockResolvedValue({ id: 'aaa', processed: true });
+    mockCaptureService.processCapture.mockResolvedValue({ id: 'aaa', processed: true });
 
     const { output } = await runCLI(['capture', 'process', 'aaa']);
 
-    expect(mockStorage.processCapture).toHaveBeenCalledWith('aaa');
+    expect(mockCaptureService.processCapture).toHaveBeenCalledWith('aaa');
     expect(output[0]).toContain('Processed');
+  });
+});
+
+describe('capture media', () => {
+  test('outputs signed URLs for capture media', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue([
+      { filename: 'photo.jpg', content_type: 'image/jpeg', url: 'https://example.com/signed/photo.jpg' },
+      { filename: 'doc.pdf', content_type: 'application/pdf', url: 'https://example.com/signed/doc.pdf' },
+    ]);
+
+    const { output } = await runCLI(['capture', 'media', 'aaa']);
+
+    expect(mockCaptureService.getCaptureMediaUrls).toHaveBeenCalledWith('aaa');
+    expect(output[0]).toContain('photo.jpg');
+    expect(output[0]).toContain('https://example.com/signed/photo.jpg');
+    expect(output[1]).toContain('doc.pdf');
+  });
+
+  test('capture media --format json outputs array', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue([
+      { filename: 'photo.jpg', content_type: 'image/jpeg', url: 'https://example.com/signed/photo.jpg' },
+    ]);
+
+    const { output } = await runCLI(['capture', 'media', 'aaa', '--format', 'json']);
+
+    const parsed = JSON.parse(output.join('\n'));
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].url).toBe('https://example.com/signed/photo.jpg');
+    expect(parsed[0].filename).toBe('photo.jpg');
+  });
+
+  test('capture media with no id exits with error', async () => {
+    const { errors, exitCode } = await runCLI(['capture', 'media']);
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain('capture_id');
+  });
+
+  test('capture media for not-found capture exits with error', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue(null);
+
+    const { errors, exitCode } = await runCLI(['capture', 'media', 'nonexistent']);
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain('not found');
+  });
+
+  test('capture media with no media shows message', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue([]);
+
+    const { output } = await runCLI(['capture', 'media', 'aaa']);
+    expect(output[0]).toContain('No media');
   });
 });

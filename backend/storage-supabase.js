@@ -396,9 +396,31 @@ async function getCapture(id) {
   const { data: media } = await supabase
     .from('brainy_capture_media')
     .select('id, filename, content_type, storage_path, created_at')
+    .eq('user_id', userId)
     .eq('capture_id', data.id);
 
   return { ...data, media: media || [] };
+}
+
+async function listCaptureMedia(captureIds) {
+  if (!captureIds.length) return [];
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from('brainy_capture_media')
+    .select('id, capture_id, filename, content_type, storage_path, created_at')
+    .eq('user_id', userId)
+    .in('capture_id', captureIds);
+  if (error) throw error;
+  return data || [];
+}
+
+async function createSignedMediaUrls(storagePaths) {
+  if (!storagePaths.length) return [];
+  const { data, error } = await supabase.storage
+    .from('brainy_files')
+    .createSignedUrls(storagePaths, 3600);
+  if (error) throw error;
+  return data || [];
 }
 
 async function processCapture(id) {
@@ -426,6 +448,8 @@ module.exports = {
   checkIntegrity,
   promoteScheduled,
   listCaptures,
+  listCaptureMedia,
+  createSignedMediaUrls,
   getCapture,
   processCapture,
 };
