@@ -2,50 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Brainy Capture</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#F7F3ED">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="icon" href="icons/icon-192.png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="app.css">
+  <meta http-equiv="refresh" content="0;url=capture/">
+  <title>Redirecting…</title>
 </head>
 <body>
-  <main>
-    <h1>Brainy Capture</h1>
-
-    <div id="auth-section">
-      <p>Sign in to start capturing.</p>
-      <button id="login-btn" type="button">Sign in with Google</button>
-    </div>
-
-    <div id="capture-section" style="display:none">
-      <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
-      <form id="capture-form">
-        <textarea id="capture-text" placeholder="What's on your mind?" rows="4"></textarea>
-        <div id="attach-area">
-          <input type="file" id="file-input" accept="*/*" multiple style="display:none">
-          <button type="button" id="attach-btn">Attach Photo/File</button>
-          <div id="file-preview"></div>
-          <div id="resize-status"></div>
-        </div>
-        <button id="capture-btn" type="submit">Capture</button>
-      </form>
-      <div id="status-msg"></div>
-    </div>
-  </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.local.js"></script>
-  <script src="config.js"></script>
-  <script src="resize.js"></script>
-  <script src="upload.js"></script>
-  <script src="app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
-    }
-  </script>
+  <p>Redirecting to <a href="capture/">capture</a>…</p>
 </body>
 </html>

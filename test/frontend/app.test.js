@@ -79,7 +79,7 @@ function loadApp(overrides) {
     supabase: { createClient: mockCreateClient },
     uploadCapture: mockUploadCapture,
     document: dom,
-    window: { location: { origin: 'https://example.com', pathname: '/brainy/' } },
+    window: { location: { origin: 'https://example.com', pathname: '/brainy/capture/' } },
     navigator: { onLine: true },
     setTimeout: jest.fn(),
     console: { error: jest.fn() },
@@ -210,7 +210,7 @@ describe('login', () => {
 
     expect(mockSignIn).toHaveBeenCalledWith({
       provider: 'google',
-      options: { redirectTo: 'https://example.com/brainy/' },
+      options: { redirectTo: 'https://example.com/brainy/capture/' },
     });
   });
 });
