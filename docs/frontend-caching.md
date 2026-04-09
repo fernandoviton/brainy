@@ -2,7 +2,7 @@
 
 ## Current approach: Network-first
 
-`sw.js` uses a **network-first** strategy: always fetch from the network, fall back to cache when offline. This means changes are visible on a normal reload without force-resetting.
+`sw-v2.js` uses a **network-first** strategy: always fetch from the network, fall back to cache when offline. This means changes are visible on a normal reload without force-resetting.
 
 Two other mechanisms ensure new SW versions activate immediately:
 - `skipWaiting()` in `install` — new SW takes over without waiting for tabs to close
@@ -24,4 +24,4 @@ Since this project has no build step, cache-first would mean never seeing update
 
 ## If a build step is added in the future
 
-Switch `sw.js` to cache-first on assets + short TTL on `index.html`, and let the build tool handle filename hashing. That gives instant loads AND automatic updates.
+Switch `sw-v2.js` to cache-first on assets + short TTL on `index.html`, and let the build tool handle filename hashing. That gives instant loads AND automatic updates.

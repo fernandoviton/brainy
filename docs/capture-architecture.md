@@ -8,8 +8,8 @@ The capture PWA is a vanilla HTML/JS progressive web app hosted on GitHub Pages.
 iPhone browser (PWA)
   → Google OAuth via Supabase client-side auth
   → resize.js: client-side image resize (Canvas API)
-  → upload.js: upload files to Supabase Storage, insert DB records
-  → app.js: UI wiring (DOM events, status display)
+  → capture/upload.js: upload files to Supabase Storage, insert DB records
+  → capture/app.js: UI wiring (DOM events, status display)
   → RLS enforces user_id on all tables and storage
 ```
 
@@ -17,11 +17,11 @@ iPhone browser (PWA)
 
 | File | Responsibility |
 |------|---------------|
-| `app.js` | UI only: auth flow, form events, button states, status messages |
-| `upload.js` | Data flow: resize → storage upload → capture insert → media insert |
+| `capture/app.js` | UI only: auth flow, form events, button states, status messages |
+| `capture/upload.js` | Data flow: resize → storage upload → capture insert → media insert |
 | `resize.js` | Image resize via `createImageBitmap` + Canvas + `toBlob` |
 | `index.html` | Form markup, script loading order |
-| `app.css` | Styles |
+| `capture/app.css` | Styles |
 | `config.js` / `config.local.js` | Supabase URL + key (injected at deploy time) |
 
 ## Key Decisions
@@ -45,10 +45,10 @@ The file picker is not restricted to images — users can attach any file type. 
 `{user_id}/captures/{Date.now()}-{sanitized_filename}` — timestamp prefix prevents collisions. Original filename preserved in the `brainy_capture_media` record; sanitized version used only in the storage path.
 
 ### Three-file split (resize / upload / app)
-- `resize.js` and `upload.js` are pure logic with no DOM dependencies
-- `upload.js` accepts `resizeFn` as a parameter for dependency injection in tests
-- `app.js` is UI wiring only — delegates all data work to `uploadCapture()`
-- This makes `upload.js` testable with plain Jest mocks (no VM context needed)
+- `resize.js` and `capture/upload.js` are pure logic with no DOM dependencies
+- `capture/upload.js` accepts `resizeFn` as a parameter for dependency injection in tests
+- `capture/app.js` is UI wiring only — delegates all data work to `uploadCapture()`
+- This makes `capture/upload.js` testable with plain Jest mocks (no VM context needed)
 
 ### Error message mapping
 Browser errors like `"Failed to fetch"` are cryptic. The app maps known patterns to user-friendly messages:
@@ -76,5 +76,5 @@ Text is nullable to support file-only captures. Cascade delete on `capture_id` e
 | Test file | Strategy |
 |-----------|----------|
 | `test/frontend/resize.test.js` | VM context with mocked `createImageBitmap` and Canvas |
-| `test/frontend/upload.test.js` | Plain Jest mocks (no VM) — mocks `db.from()`, `db.storage.from()` |
-| `test/frontend/app.test.js` | VM context with mocked DOM, mocked `uploadCapture` injected as global |
+| `test/frontend/capture/upload.test.js` | Plain Jest mocks (no VM) — mocks `db.from()`, `db.storage.from()` |
+| `test/frontend/capture/app.test.js` | VM context with mocked DOM, mocked `uploadCapture` injected as global |

@@ -35,7 +35,7 @@ describe('manifest.json', () => {
 });
 
 describe('service worker', () => {
-  test('sw.js exists', () => {
-    expect(fs.existsSync(path.join(FRONTEND, 'sw.js'))).toBe(true);
+  test('sw-v2.js exists', () => {
+    expect(fs.existsSync(path.join(FRONTEND, 'sw-v2.js'))).toBe(true);
   });
 });

@@ -54,7 +54,7 @@ describe('Supabase client initialization', () => {
     };
     vm.createContext(ctx);
 
-    const appCode = fs.readFileSync(path.join(__dirname, '../../frontend/app.js'), 'utf8');
+    const appCode = fs.readFileSync(path.join(__dirname, '../../frontend/capture/app.js'), 'utf8');
     vm.runInContext(appCode, ctx);
 
     expect(mockCreateClient).toHaveBeenCalledWith('https://test.supabase.co', 'test-key');

@@ -38,7 +38,7 @@ beforeAll(() => {
   const path = require('path');
   const fs = require('fs');
   const vm = require('vm');
-  const code = fs.readFileSync(path.join(__dirname, '../../frontend/upload.js'), 'utf8');
+  const code = fs.readFileSync(path.join(__dirname, '../../../frontend/capture/upload.js'), 'utf8');
   const ctx = { Promise: Promise };
   vm.createContext(ctx);
   vm.runInContext(code, ctx);

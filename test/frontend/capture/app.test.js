@@ -4,7 +4,7 @@ const vm = require('vm');
 
 const flushPromises = () => new Promise(process.nextTick);
 
-const appCode = fs.readFileSync(path.join(__dirname, '../../frontend/app.js'), 'utf8');
+const appCode = fs.readFileSync(path.join(__dirname, '../../../frontend/capture/app.js'), 'utf8');
 
 function buildMockDOM() {
   const elements = {};

@@ -1,10 +1,11 @@
-var CACHE_NAME = 'brainy-v2';
+var CACHE_NAME = 'brainy-v3';
 var SHELL_FILES = [
   '.',
   'capture/',
   'capture/index.html',
-  'app.js',
-  'app.css',
+  'capture/app.js',
+  'capture/app.css',
+  'capture/upload.js',
   'config.js',
   'manifest.json',
 ];
