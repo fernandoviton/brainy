@@ -35,7 +35,6 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 │  scheduled_date date     │  └───────────┬───────────┘
 │  blocked_by text[]       │              │ knowledge_id FK
 │  notes      text         │              │ (cascade delete)
-│  has_folder boolean      │              ▼
 │  created_at timestamptz  │  ┌────────────────────────────────┐
 │  updated_at timestamptz  │  │  brainy_knowledge_attachments  │
 │                          │  │────────────────────────────────│
@@ -93,7 +92,6 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 │  year_month   text NN    │  │  created_at  timestamptz      │
 │  summary_text text       │  │  updated_at  timestamptz      │
 │  todo_snapshot    jsonb  │  │                               │
-│  notes_snapshot   text   │  │  UQ(user_id, year_month)      │
 │  collateral_snapshot jsonb│  └───────────────────────────────┘
 │  created_at   timestamptz│
 │                          │

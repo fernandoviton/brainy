@@ -28,27 +28,19 @@ node backend/cli.js <command>
 
 Config is in `.env`.
 
-### CLI Commands
+### CLI Reference
 
-```
-todo list [--status <status>] [--format json]
-todo get <name> [--format json]
-todo create --name <name> --summary <summary> --status <status> [--priority <p>] [--category <c>] [--due <date>] [--scheduled-date <date>]
-todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin] [--blocked-by <name>]
-todo archive <name> --summary-text <text> --completion-date <date>
+All three resources (**todo**, **capture**, **knowledge**) support `list` and `get <identifier>`. All commands support `--format json`.
 
-capture list [--all] [--format json]   # json includes media[] on each capture
-capture get <id> [--format json]       # always includes media[]
-capture media <capture_id> [--format json]  # signed download URLs for media (1hr expiry)
-capture process <id>
+| Resource    | Identifier | Extra actions                                       |
+|-------------|------------|-----------------------------------------------------|
+| todo        | `<name>`   | create, update, delete, archive, collateral (CRUD)  |
+| capture     | `<id>`     | media, process                                      |
+| knowledge   | `<path>`   | upsert `<path>` --stdin                             |
 
-knowledge list [--prefix <path>] [--format json]
-knowledge get <path> [--format json]
-knowledge upsert --path <path> --stdin
+Utilities: `check-integrity`, `promote-scheduled`
 
-check-integrity
-promote-scheduled
-```
+Run `node backend/cli.js <resource> help` for full flag details.
 
 ### TODO Statuses
 - `inbox` — Newly captured, not yet triaged

@@ -3,8 +3,8 @@
 ## When updating notes it should always be additive.
 Had a problem where I told it an update and it erased all the previous notes.  Supabase is not good for versioning.  We should make sure the cli only allows updating new rows.  When archiving is the only time it can delete (and then it rewrites everything).  Ie notes about a todo should be a ledger.  Another approach is to prompt and make sure it always reads what is there and updates but I feel that is too fragile.
 
-## Get files for TODO and anythign else
-**`todo collateral <name>` CLI command** — Generate signed download URLs for TODO collateral files, similar to `capture media`. The storage_path and `createSignedMediaUrls` infra already exist; just needs wiring in `cli.js`.  Need to also do for knowledge.  Anythign else?
+## ~~Get files for TODO~~ (DONE)
+~~`todo collateral <name>` CLI command~~ — Implemented as `todo collateral list/add/get/remove`. Text files stored inline, binary files in Supabase Storage with signed URLs. Knowledge attachments still TODO.
 
 ## SQL-Powered Review
 Use priority/due-date sorting and filtering directly in SQL for `/review` and `/focus`. Replace in-memory scoring with database queries.
@@ -18,8 +18,8 @@ Replace the session-start hook with `pg_cron` or a Supabase Edge Function that p
 ## Cross-Device Access
 With Supabase as the backend, Brainy can work from any machine with the CLI and `.env` credentials. Consider a lightweight web UI or mobile client for quick captures on the go.
 
-## Binary Collateral in Supabase Storage
-Store PDFs, images, and other binary collateral in the `brainy_files` Storage bucket instead of the filesystem. The `todo_collateral` and `knowledge_attachments` tables already support `storage_path`.
+## ~~Binary Collateral in Supabase Storage~~ (DONE for TODOs)
+~~Store PDFs, images, and other binary collateral in the `brainy_files` Storage bucket.~~ Implemented for TODO collateral via `todo collateral add`. Knowledge attachments still use the existing schema but have no CLI commands yet.
 
 ## Isolate Brainy into Its Own Supabase Project
 

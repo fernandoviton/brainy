@@ -1,26 +1,67 @@
 #!/usr/bin/env node
 /**
  * Brainy CLI — unified interface for both file and Supabase backends.
- *
- * Usage:
- *   node backend/cli.js todo list [--status <status>] [--format json]
- *   node backend/cli.js todo get <name> [--format json]
- *   node backend/cli.js todo create --name <name> --summary <summary> [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>]
- *   node backend/cli.js todo update <name> [--summary <s>] [--status <s>] [--priority <p>] [--category <c>] [--due <d>] [--scheduled-date <d>] [--field notes --stdin]
- *   node backend/cli.js todo delete <name>
- *   node backend/cli.js todo archive <name> [--summary-text <text>] [--completion-date <d>]
- *   node backend/cli.js capture list [--all] [--format json]
- *   node backend/cli.js capture get <id> [--format json]
- *   node backend/cli.js capture media <capture_id> [--format json]
- *   node backend/cli.js capture process <id>
- *   node backend/cli.js knowledge list [--prefix <prefix>] [--format json]
- *   node backend/cli.js knowledge get <path> [--format json]
- *   node backend/cli.js knowledge upsert --path <path> --stdin
- *   node backend/cli.js check-integrity
- *   node backend/cli.js promote-scheduled
+ * Run with "help" or "<resource> help" for usage details.
  */
 const { getStorage } = require('./storage');
 const captureService = require('./capture-service');
+
+const HELP = {
+  main: `Usage: node backend/cli.js <resource> [action] [options]
+
+Resources:
+  todo                 Manage TODOs (CRUD, archive, collateral)
+  capture              Manage captures (list, get, media, process)
+  knowledge            Manage knowledge entries (list, get, upsert)
+  check-integrity      Run data integrity checks
+  promote-scheduled    Promote scheduled TODOs whose date has arrived
+
+Run "node backend/cli.js <resource> help" for details on each resource.
+All commands support --format json for machine-readable output.`,
+
+  todo: `Usage: node backend/cli.js todo <action> [options]
+
+Actions:
+  list [--status <status>]                         List TODOs, optionally filtered by status
+  get <name>                                       Get full TODO details (notes, collateral)
+  create --name <n> --summary <s> [--status <s>]   Create a new TODO
+           [--priority <p>] [--category <c>]
+           [--due <date>] [--scheduled-date <date>]
+  update <name> [--summary <s>] [--status <s>]     Update TODO fields
+           [--priority <p>] [--category <c>]
+           [--due <d>] [--scheduled-date <d>]
+           [--blocked-by <name>]
+           [--field notes --stdin]                  Pipe notes content via stdin
+  delete <name>                                    Delete a TODO
+  archive <name> [--summary-text <t>]              Archive a completed TODO
+           [--completion-date <d>]
+  collateral list <name>                           List collateral files
+  collateral add <name> <filepath>                 Attach a file
+  collateral remove <name> <filename>              Remove an attachment
+  collateral get <name> <filename>                 Get collateral content
+
+Statuses: inbox, active, later, scheduled
+Priorities: P0 (urgent), P1 (high), P2 (medium), P3 (low)`,
+
+  capture: `Usage: node backend/cli.js capture <action> [options]
+
+Actions:
+  list [--all]          List unprocessed captures (--all includes processed)
+  get <id>              Get capture details including media
+  media <capture_id>    Get signed download URLs for media (1hr expiry)
+  process <id>          Mark a capture as processed`,
+
+  knowledge: `Usage: node backend/cli.js knowledge <action> [options]
+
+Actions:
+  list [--prefix <path>]       List knowledge entries, optionally filtered by path prefix
+  get <path>                   Get knowledge content
+  upsert <path> --stdin        Create or update knowledge (content via stdin)`,
+};
+
+function showHelp(resource) {
+  console.log(HELP[resource] || HELP.main);
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -83,7 +124,10 @@ function output(data, format) {
       if (data.due) console.log(`Due: ${data.due}`);
       if (data.scheduled_date) console.log(`Scheduled: ${data.scheduled_date}`);
       if (data.blocked_by?.length) console.log(`Blocked by: ${data.blocked_by.join(', ')}`);
-      if (data.collateral?.length) console.log(`Collateral: ${data.collateral.join(', ')}`);
+      if (data.collateral?.length) {
+        const names = data.collateral.map((c) => typeof c === 'string' ? c : c.filename);
+        console.log(`Collateral: ${names.join(', ')}`);
+      }
       if (data.notes) console.log(`\n${data.notes}`);
     } else if (data.id && data.text !== undefined) {
       // Capture detail view
@@ -113,7 +157,13 @@ async function main() {
   const format = args.format;
 
   try {
+    if (!resource || resource === 'help') {
+      showHelp('main');
+      return;
+    }
+
     if (resource === 'todo') {
+      if (!action || action === 'help') { showHelp('todo'); return; }
       if (action === 'list') {
         const result = await storage.listTodos(args.status || undefined);
         output(result, format);
@@ -156,6 +206,47 @@ async function main() {
         if (!name) { console.error('Usage: todo delete <name>'); process.exit(1); }
         await storage.deleteTodo(name);
         console.log(`Deleted: ${name}`);
+      } else if (action === 'collateral') {
+        const [subAction, ...subRest] = rest;
+        if (subAction === 'list') {
+          const name = subRest[0];
+          if (!name) { console.error('Usage: todo collateral list <name>'); process.exit(1); }
+          const result = await storage.listCollateral(name);
+          if (format === 'json') {
+            output(result, format);
+          } else {
+            for (const c of result) {
+              console.log(`- ${c.filename} (${c.content_type}) [${c.is_text ? 'text' : 'binary'}]`);
+            }
+          }
+        } else if (subAction === 'add') {
+          const name = subRest[0];
+          const filepath = subRest[1];
+          if (!name || !filepath) { console.error('Usage: todo collateral add <name> <filepath>'); process.exit(1); }
+          const result = await storage.addCollateral(name, filepath);
+          console.log(`Added: ${result.filename} (${result.content_type}) [${result.is_text ? 'text' : 'binary'}]`);
+        } else if (subAction === 'remove') {
+          const name = subRest[0];
+          const filename = subRest[1];
+          if (!name || !filename) { console.error('Usage: todo collateral remove <name> <filename>'); process.exit(1); }
+          const result = await storage.removeCollateral(name, filename);
+          console.log(`Removed: ${result.filename}`);
+        } else if (subAction === 'get') {
+          const name = subRest[0];
+          const filename = subRest[1];
+          if (!name || !filename) { console.error('Usage: todo collateral get <name> <filename>'); process.exit(1); }
+          const result = await storage.getCollateral(name, filename);
+          if (format === 'json') {
+            output(result, format);
+          } else if (result.text_content !== undefined) {
+            console.log(result.text_content);
+          } else {
+            console.log(`${result.filename} (${result.content_type}): ${result.url}`);
+          }
+        } else {
+          console.error(`Unknown collateral action: ${subAction}`);
+          process.exit(1);
+        }
       } else if (action === 'archive') {
         const name = rest[0] || args.name;
         if (!name) { console.error('Usage: todo archive <name>'); process.exit(1); }
@@ -165,10 +256,12 @@ async function main() {
         });
         console.log(`Archived: ${result.name} -> ${result.year_month}`);
       } else {
-        console.error(`Unknown todo action: ${action}`);
+        console.error(`Unknown todo action: ${action}\n`);
+        showHelp('todo');
         process.exit(1);
       }
     } else if (resource === 'capture') {
+      if (!action || action === 'help') { showHelp('capture'); return; }
       if (action === 'list') {
         const all = args.all || undefined;
         const result = await captureService.listCapturesWithMedia(all);
@@ -198,10 +291,12 @@ async function main() {
         const result = await captureService.processCapture(id);
         console.log(`Processed: ${result.id}`);
       } else {
-        console.error(`Unknown capture action: ${action}`);
+        console.error(`Unknown capture action: ${action}\n`);
+        showHelp('capture');
         process.exit(1);
       }
     } else if (resource === 'knowledge') {
+      if (!action || action === 'help') { showHelp('knowledge'); return; }
       if (action === 'list') {
         const result = await storage.listKnowledge(args.prefix || undefined);
         output(result, format);
@@ -212,17 +307,19 @@ async function main() {
         if (!result) { console.error(`Knowledge '${kPath}' not found`); process.exit(1); }
         output(result, format);
       } else if (action === 'upsert') {
-        if (!args.path) { console.error('Usage: knowledge upsert --path <path> --stdin'); process.exit(1); }
+        const upsertPath = rest[0] || args.path;
+        if (!upsertPath) { console.error('Usage: knowledge upsert <path> --stdin'); process.exit(1); }
         const content = args.stdin ? await readStdin() : '';
         const result = await storage.upsertKnowledge({
-          path: args.path,
+          path: upsertPath,
           content,
           topic: args.topic,
           format: args.format,
         });
         console.log(`Upserted: ${result.path}`);
       } else {
-        console.error(`Unknown knowledge action: ${action}`);
+        console.error(`Unknown knowledge action: ${action}\n`);
+        showHelp('knowledge');
         process.exit(1);
       }
     } else if (resource === 'check-integrity') {
@@ -244,7 +341,8 @@ async function main() {
         console.log(`Promoted ${promoted.length} item(s): ${promoted.join(', ')}`);
       }
     } else {
-      console.error('Usage: node backend/cli.js <todo|capture|knowledge|check-integrity|promote-scheduled> ...');
+      console.error(`Unknown resource: ${resource}\n`);
+      showHelp('main');
       process.exit(1);
     }
   } catch (err) {

@@ -103,6 +103,24 @@ node backend/cli.js todo archive my-task --summary-text "Done, learned Y"
 node backend/cli.js todo delete my-task
 ```
 
+### TODO Collateral
+
+Attach files (notes, images, PDFs) to any TODO. Text files are stored inline; binary files are uploaded to Supabase Storage.
+
+```bash
+# List collateral for a TODO
+node backend/cli.js todo collateral list my-task
+
+# Add a file as collateral
+node backend/cli.js todo collateral add my-task /path/to/notes.md
+
+# Get collateral content (text) or signed download URL (binary)
+node backend/cli.js todo collateral get my-task notes.md
+
+# Remove collateral (deletes storage object for binary files)
+node backend/cli.js todo collateral remove my-task notes.md
+```
+
 ### Captures
 
 ```bash

@@ -21,7 +21,7 @@ async function listTodos(status) {
   const userId = await getUserId();
   let query = supabase
     .from('brainy_todos')
-    .select('name, summary, status, priority, category, created_date, due, scheduled_date, blocked_by, has_folder')
+    .select('name, summary, status, priority, category, created_date, due, scheduled_date, blocked_by')
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
 
@@ -42,7 +42,6 @@ async function listTodos(status) {
     due: row.due ? String(row.due) : null,
     scheduled_date: row.scheduled_date ? String(row.scheduled_date) : null,
     blocked_by: row.blocked_by || [],
-    has_folder: row.has_folder || false,
   }));
 }
 
@@ -60,10 +59,10 @@ async function getTodo(name) {
     throw error;
   }
 
-  // Fetch collateral filenames
+  // Fetch collateral
   const { data: collateral } = await supabase
     .from('brainy_todo_collateral')
-    .select('filename')
+    .select('filename, content_type, text_content')
     .eq('todo_id', data.id);
 
   return {
@@ -77,8 +76,11 @@ async function getTodo(name) {
     scheduled_date: data.scheduled_date ? String(data.scheduled_date) : null,
     blocked_by: data.blocked_by || [],
     notes: data.notes || null,
-    collateral: (collateral || []).map((c) => c.filename),
-    has_folder: data.has_folder || false,
+    collateral: (collateral || []).map((c) => ({
+      filename: c.filename,
+      content_type: c.content_type,
+      is_text: c.text_content !== null,
+    })),
   };
 }
 
@@ -170,7 +172,6 @@ async function archiveTodo(name, { summaryText, completionDate }) {
     year_month: yearMonth,
     summary_text: summaryText || 'Completed.',
     todo_snapshot: { ...todo, id: undefined, user_id: undefined },
-    notes_snapshot: todo.notes,
     collateral_snapshot: collateral?.length > 0 ? collateral.map((c) => c.filename) : null,
   });
   if (archiveErr) throw archiveErr;
@@ -435,6 +436,199 @@ async function processCapture(id) {
   return { id, processed: true };
 }
 
+// ---------------------------------------------------------------------------
+// Collateral
+// ---------------------------------------------------------------------------
+
+async function listCollateral(todoName) {
+  const userId = await getUserId();
+  const { data: todo, error: todoErr } = await supabase
+    .from('brainy_todos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', todoName)
+    .single();
+  if (todoErr) throw todoErr;
+
+  const { data, error } = await supabase
+    .from('brainy_todo_collateral')
+    .select('filename, content_type, text_content')
+    .eq('todo_id', todo.id);
+  if (error) throw error;
+
+  return (data || []).map((c) => ({
+    filename: c.filename,
+    content_type: c.content_type,
+    is_text: c.text_content !== null,
+  }));
+}
+
+const TEXT_TYPES = new Set([
+  'text/plain', 'text/markdown', 'text/html', 'text/css', 'text/csv',
+  'text/xml', 'text/yaml', 'text/javascript',
+  'application/json', 'application/yaml', 'application/xml',
+  'application/javascript', 'application/x-yaml',
+]);
+
+const EXT_TO_CONTENT_TYPE = {
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.html': 'text/html',
+  '.htm': 'text/html',
+  '.css': 'text/css',
+  '.csv': 'text/csv',
+  '.xml': 'text/xml',
+  '.yml': 'text/yaml',
+  '.yaml': 'text/yaml',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.ts': 'text/javascript',
+  '.py': 'text/plain',
+  '.sh': 'text/plain',
+  '.bat': 'text/plain',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.zip': 'application/zip',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+function isTextType(contentType) {
+  if (!contentType) return false;
+  return contentType.startsWith('text/') || TEXT_TYPES.has(contentType);
+}
+
+function detectContentType(filepath) {
+  const ext = require('path').extname(filepath).toLowerCase();
+  return EXT_TO_CONTENT_TYPE[ext] || 'application/octet-stream';
+}
+
+async function addCollateral(todoName, filepath) {
+  const fs = require('fs/promises');
+  const path = require('path');
+  const userId = await getUserId();
+
+  const { data: todo, error: todoErr } = await supabase
+    .from('brainy_todos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', todoName)
+    .single();
+  if (todoErr) throw todoErr;
+
+  const filename = path.basename(filepath);
+  const contentType = detectContentType(filepath);
+
+  if (isTextType(contentType)) {
+    const textContent = await fs.readFile(filepath, 'utf-8');
+    const { error } = await supabase.from('brainy_todo_collateral').insert({
+      user_id: userId,
+      todo_id: todo.id,
+      filename,
+      content_type: contentType,
+      text_content: textContent,
+    });
+    if (error) throw error;
+    return { filename, content_type: contentType, is_text: true };
+  } else {
+    const fileBuffer = await fs.readFile(filepath);
+    const storagePath = `${userId}/${todo.id}/${filename}`;
+    const { error: uploadErr } = await supabase.storage
+      .from('brainy_files')
+      .upload(storagePath, fileBuffer);
+    if (uploadErr) throw uploadErr;
+
+    const { error } = await supabase.from('brainy_todo_collateral').insert({
+      user_id: userId,
+      todo_id: todo.id,
+      filename,
+      content_type: contentType,
+      storage_path: storagePath,
+    });
+    if (error) throw error;
+    return { filename, content_type: contentType, is_text: false };
+  }
+}
+
+async function removeCollateral(todoName, filename) {
+  const userId = await getUserId();
+
+  const { data: todo, error: todoErr } = await supabase
+    .from('brainy_todos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', todoName)
+    .single();
+  if (todoErr) throw todoErr;
+
+  // Fetch the collateral row to check for storage_path
+  const { data: collateral, error: fetchErr } = await supabase
+    .from('brainy_todo_collateral')
+    .select('id, storage_path')
+    .eq('todo_id', todo.id)
+    .eq('filename', filename)
+    .single();
+  if (fetchErr) throw fetchErr;
+
+  // Delete from storage if binary
+  if (collateral.storage_path) {
+    await supabase.storage
+      .from('brainy_files')
+      .remove([collateral.storage_path]);
+  }
+
+  // Delete the row
+  const { error } = await supabase
+    .from('brainy_todo_collateral')
+    .delete()
+    .eq('id', collateral.id);
+  if (error) throw error;
+
+  return { filename, removed: true };
+}
+
+async function getCollateral(todoName, filename) {
+  const userId = await getUserId();
+
+  const { data: todo, error: todoErr } = await supabase
+    .from('brainy_todos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', todoName)
+    .single();
+  if (todoErr) throw todoErr;
+
+  const { data: collateral, error: fetchErr } = await supabase
+    .from('brainy_todo_collateral')
+    .select('filename, content_type, text_content, storage_path')
+    .eq('todo_id', todo.id)
+    .eq('filename', filename)
+    .single();
+  if (fetchErr) throw fetchErr;
+
+  if (collateral.text_content !== null) {
+    return {
+      filename: collateral.filename,
+      content_type: collateral.content_type,
+      text_content: collateral.text_content,
+    };
+  }
+
+  // Binary — generate signed URL
+  const urls = await createSignedMediaUrls([collateral.storage_path]);
+  return {
+    filename: collateral.filename,
+    content_type: collateral.content_type,
+    url: urls[0]?.signedUrl || urls[0]?.signedURL || null,
+  };
+}
+
 module.exports = {
   listTodos,
   getTodo,
@@ -452,4 +646,8 @@ module.exports = {
   createSignedMediaUrls,
   getCapture,
   processCapture,
+  listCollateral,
+  addCollateral,
+  removeCollateral,
+  getCollateral,
 };

@@ -30,7 +30,6 @@ create table if not exists brainy_todos (
   scheduled_date date,
   blocked_by text[] default '{}',
   notes text,
-  has_folder boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
 
@@ -152,7 +151,6 @@ create table if not exists brainy_archive_entries (
   year_month text not null,
   summary_text text,
   todo_snapshot jsonb,
-  notes_snapshot text,
   collateral_snapshot jsonb,
   created_at timestamptz default now()
 );
