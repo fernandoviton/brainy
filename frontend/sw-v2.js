@@ -1,6 +1,9 @@
-var CACHE_NAME = 'brainy-v3';
+var CACHE_NAME = 'brainy-v4';
 var SHELL_FILES = [
   '.',
+  'shared.css',
+  'nav.js',
+  'utils.js',
   'capture/',
   'capture/index.html',
   'capture/app.js',
@@ -31,6 +34,7 @@ self.addEventListener('activate', function (e) {
 });
 
 self.addEventListener('fetch', function (e) {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request)
       .then(function (response) {

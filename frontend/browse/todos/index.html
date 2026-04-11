@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainy — TODOs</title>
+  <meta name="theme-color" content="#F7F3ED">
+  <link rel="icon" href="../../icons/icon-192.png">
+  <link rel="stylesheet" href="../../shared.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>TODOs</h1>
+
+    <div id="auth-section">
+      <p>Sign in to view your TODOs.</p>
+      <button id="login-btn" type="button">Sign in with Google</button>
+    </div>
+
+    <div id="content-section" style="display:none">
+      <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
+
+      <div id="filters">
+        <div class="filter-group">
+          <span class="filter-label">Status</span>
+          <div class="filter-pills" id="status-filter">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="inbox">Inbox</button>
+            <button class="pill" data-value="active">Active</button>
+            <button class="pill" data-value="later">Later</button>
+            <button class="pill" data-value="scheduled">Scheduled</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Priority</span>
+          <div class="filter-pills" id="priority-filter">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="P0">P0</button>
+            <button class="pill" data-value="P1">P1</button>
+            <button class="pill" data-value="P2">P2</button>
+            <button class="pill" data-value="P3">P3</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="cards"></div>
+      <div id="status-msg"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../config.local.js"></script>
+  <script src="../../config.js"></script>
+  <script src="../../nav.js"></script>
+  <script src="../../utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainy — Captures</title>
+  <meta name="theme-color" content="#F7F3ED">
+  <link rel="icon" href="../../icons/icon-192.png">
+  <link rel="stylesheet" href="../../shared.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>Captures</h1>
+
+    <div id="auth-section">
+      <p>Sign in to view your captures.</p>
+      <button id="login-btn" type="button">Sign in with Google</button>
+    </div>
+
+    <div id="content-section" style="display:none">
+      <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
+
+      <div id="filters">
+        <div class="filter-group">
+          <span class="filter-label">Status</span>
+          <div class="filter-pills" id="processed-filter">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="unprocessed">Unprocessed</button>
+            <button class="pill" data-value="processed">Processed</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="cards"></div>
+      <div id="status-msg"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../config.local.js"></script>
+  <script src="../../config.js"></script>
+  <script src="../../nav.js"></script>
+  <script src="../../utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
