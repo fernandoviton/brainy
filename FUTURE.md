@@ -1,6 +1,10 @@
 # Future Ideas
 
-Potential enhancements for Brainy.
+## When updating notes it should always be additive.
+Had a problem where I told it an update and it erased all the previous notes.  Supabase is not good for versioning.  We should make sure the cli only allows updating new rows.  When archiving is the only time it can delete (and then it rewrites everything).  Ie notes about a todo should be a ledger.  Another approach is to prompt and make sure it always reads what is there and updates but I feel that is too fragile.
+
+## Get files for TODO and anythign else
+**`todo collateral <name>` CLI command** — Generate signed download URLs for TODO collateral files, similar to `capture media`. The storage_path and `createSignedMediaUrls` infra already exist; just needs wiring in `cli.js`.  Need to also do for knowledge.  Anythign else?
 
 ## SQL-Powered Review
 Use priority/due-date sorting and filtering directly in SQL for `/review` and `/focus`. Replace in-memory scoring with database queries.
