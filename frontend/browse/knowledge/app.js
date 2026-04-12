@@ -11,10 +11,20 @@ var pathSearch = document.getElementById('path-search');
 var _formatFilter = '';
 var _pathPrefix = '';
 var _debounceTimer = null;
+var _items = [];
+var _detailCache = {};
+var _attachmentCache = {};
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
   statusMsg.className = className;
+}
+
+function renderMarkdown(text) {
+  if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+    return DOMPurify.sanitize(marked.parse(text));
+  }
+  return escapeHtml(text);
 }
 
 db.auth.onAuthStateChange(function (event, session) {
@@ -61,7 +71,7 @@ pathSearch.addEventListener('input', function () {
 
 function loadKnowledge() {
   var query = db.from('brainy_knowledge')
-    .select('path, topic, summary, format, updated_at')
+    .select('id, path, topic, summary, format, updated_at')
     .order('path')
     .limit(100);
 
@@ -73,7 +83,10 @@ function loadKnowledge() {
       showStatus('Failed to load: ' + result.error.message, 'status-error');
       return;
     }
-    renderKnowledge(result.data);
+    _items = result.data || [];
+    _detailCache = {};
+    _attachmentCache = {};
+    renderKnowledge(_items);
   });
 }
 
@@ -96,15 +109,136 @@ function renderKnowledge(items) {
   var html = '';
   for (var i = 0; i < items.length; i++) {
     var k = items[i];
-    html += '<div class="card">' +
-      '<div class="card-path">' + renderPathBreadcrumb(k.path) + '</div>' +
+    html += '<div class="card" data-knowledge-idx="' + i + '">' +
+      '<div class="card-header">' +
+        '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
+        '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
+        (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
+      '</div>' +
       (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
       (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
       '<div class="card-meta">' +
-        (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
         '<span>' + escapeHtml(formatDate(k.updated_at)) + '</span>' +
       '</div>' +
     '</div>';
   }
   cardsEl.innerHTML = html;
+}
+
+// Expand/collapse via event delegation
+cardsEl.addEventListener('click', function (e) {
+  var toggle = e.target;
+  if (!toggle.classList.contains('card-toggle')) return;
+
+  var card = toggle.closest('.card');
+  if (!card) return;
+
+  var idx = parseInt(card.getAttribute('data-knowledge-idx'), 10);
+  var item = _items[idx];
+  if (!item) return;
+
+  var expanded = card.classList.toggle('card-expanded');
+  if (!expanded) return;
+
+  var detail = card.querySelector('.card-detail');
+  if (detail) return;
+
+  detail = document.createElement('div');
+  detail.className = 'card-detail';
+  detail.innerHTML = '<div class="detail-loading">Loading\u2026</div>';
+  card.appendChild(detail);
+
+  loadDetail(item, detail);
+});
+
+function loadDetail(item, detailEl) {
+  if (_detailCache[item.path] !== undefined) {
+    renderDetail(_detailCache[item.path], detailEl);
+    loadAttachments(item.id, detailEl);
+    return;
+  }
+
+  db.from('brainy_knowledge')
+    .select('id, content, format')
+    .eq('id', item.id)
+    .then(function (result) {
+      var row = (!result.error && result.data && result.data[0]) ? result.data[0] : {};
+      _detailCache[item.path] = row;
+      renderDetail(row, detailEl);
+      loadAttachments(item.id, detailEl);
+    });
+}
+
+function renderDetail(row, detailEl) {
+  var html = '';
+  if (row.content) {
+    if (row.format === 'yaml') {
+      html += '<div class="card-content"><pre>' + escapeHtml(row.content) + '</pre></div>';
+    } else {
+      html += '<div class="card-content">' + renderMarkdown(row.content) + '</div>';
+    }
+  } else {
+    html += '<div class="detail-empty">No content.</div>';
+  }
+  detailEl.innerHTML = html;
+}
+
+function loadAttachments(knowledgeId, detailEl) {
+  if (_attachmentCache[knowledgeId] !== undefined) {
+    renderAttachments(_attachmentCache[knowledgeId], detailEl);
+    return;
+  }
+
+  db.from('brainy_knowledge_attachments')
+    .select('id, filename, content_type, storage_path')
+    .eq('knowledge_id', knowledgeId)
+    .then(function (result) {
+      var items = (result.error ? [] : result.data) || [];
+      _attachmentCache[knowledgeId] = items;
+      renderAttachments(items, detailEl);
+    });
+}
+
+function renderAttachments(items, detailEl) {
+  if (!items || items.length === 0) return;
+
+  var html = '<div class="card-attachments">';
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (item.storage_path) {
+      html += '<div class="collateral-box collateral-box-link">' +
+        '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '">' +
+          escapeHtml(item.filename) +
+        '</span>' +
+      '</div>';
+    }
+  }
+  html += '</div>';
+  detailEl.innerHTML += html;
+
+  resolveSignedUrls(detailEl);
+}
+
+function resolveSignedUrls(detailEl) {
+  var placeholders = detailEl.querySelectorAll('[data-storage-path]');
+  if (!placeholders || !placeholders.length) return;
+
+  for (var i = 0; i < placeholders.length; i++) {
+    (function (el) {
+      var storagePath = el.getAttribute('data-storage-path');
+      db.storage.from('brainy_files').createSignedUrl(storagePath, 3600)
+        .then(function (result) {
+          if (result.data && result.data.signedUrl) {
+            var a = document.createElement('a');
+            a.href = result.data.signedUrl;
+            a.target = '_blank';
+            a.className = 'collateral-file-link';
+            a.textContent = el.textContent;
+            if (el.parentNode && el.parentNode.replaceChild) {
+              el.parentNode.replaceChild(a, el);
+            }
+          }
+        });
+    })(placeholders[i]);
+  }
 }
