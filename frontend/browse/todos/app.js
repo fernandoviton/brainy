@@ -9,10 +9,20 @@ var statusMsg = document.getElementById('status-msg');
 
 var _statusFilter = '';
 var _priorityFilter = '';
+var _todos = [];
+var _detailCache = {};
+var _collateralCache = {};
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
   statusMsg.className = className;
+}
+
+function renderMarkdown(text) {
+  if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+    return DOMPurify.sanitize(marked.parse(text));
+  }
+  return escapeHtml(text);
 }
 
 db.auth.onAuthStateChange(function (event, session) {
@@ -60,7 +70,7 @@ setupFilterGroup('priority-filter', function (val) {
 });
 
 function loadTodos() {
-  var query = db.from('brainy_todos').select('*').order('created_at', { ascending: false }).limit(50);
+  var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, created_at').order('created_at', { ascending: false }).limit(50);
   if (_statusFilter) query = query.eq('status', _statusFilter);
   if (_priorityFilter) query = query.eq('priority', _priorityFilter);
 
@@ -69,7 +79,10 @@ function loadTodos() {
       showStatus('Failed to load: ' + result.error.message, 'status-error');
       return;
     }
-    renderTodos(result.data);
+    _todos = result.data || [];
+    _detailCache = {};
+    _collateralCache = {};
+    renderTodos(_todos);
   });
 }
 
@@ -82,8 +95,9 @@ function renderTodos(todos) {
   var html = '';
   for (var i = 0; i < todos.length; i++) {
     var t = todos[i];
-    html += '<div class="card">' +
+    html += '<div class="card" data-todo-idx="' + i + '">' +
       '<div class="card-header">' +
+        '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
         '<span class="card-name">' + escapeHtml(t.name) + '</span>' +
         '<span class="badge badge-status-' + escapeHtml(t.status) + '">' + escapeHtml(t.status) + '</span>' +
         (t.priority ? '<span class="badge badge-priority-' + escapeHtml(t.priority) + '">' + escapeHtml(t.priority) + '</span>' : '') +
@@ -91,10 +105,141 @@ function renderTodos(todos) {
       (t.summary ? '<div class="card-summary">' + escapeHtml(truncate(t.summary, 200)) + '</div>' : '') +
       '<div class="card-meta">' +
         (t.category ? '<span>' + escapeHtml(t.category) + '</span>' : '') +
-        (t.due_date ? '<span>Due ' + escapeHtml(t.due_date) + '</span>' : '') +
+        (t.due ? '<span>Due ' + escapeHtml(t.due) + '</span>' : '') +
         '<span>' + escapeHtml(formatDate(t.created_at)) + '</span>' +
       '</div>' +
     '</div>';
   }
   cardsEl.innerHTML = html;
+}
+
+// Expand/collapse via event delegation
+cardsEl.addEventListener('click', function (e) {
+  var toggle = e.target;
+  if (!toggle.classList.contains('card-toggle')) return;
+
+  var card = toggle.closest('.card');
+  if (!card) return;
+
+  var idx = parseInt(card.getAttribute('data-todo-idx'), 10);
+  var todo = _todos[idx];
+  if (!todo) return;
+
+  var expanded = card.classList.toggle('card-expanded');
+  if (!expanded) return; // collapsing — just toggle class, detail div stays hidden via CSS
+
+  // Already has detail div? skip rebuild
+  var detail = card.querySelector('.card-detail');
+  if (detail) return;
+
+  // Build detail div
+  detail = document.createElement('div');
+  detail.className = 'card-detail';
+  detail.innerHTML = '<div class="detail-loading">Loading\u2026</div>';
+  card.appendChild(detail);
+
+  // Fetch full todo details + collateral
+  loadDetail(todo.id, detail);
+});
+
+function loadDetail(todoId, detailEl) {
+  if (_detailCache[todoId] !== undefined) {
+    renderDetail(_detailCache[todoId], detailEl);
+    loadCollateral(todoId, detailEl);
+    return;
+  }
+
+  db.from('brainy_todos')
+    .select('id, notes')
+    .eq('id', todoId)
+    .then(function (result) {
+      var row = (!result.error && result.data && result.data[0]) ? result.data[0] : {};
+      _detailCache[todoId] = row;
+      renderDetail(row, detailEl);
+      loadCollateral(todoId, detailEl);
+    });
+}
+
+function renderDetail(row, detailEl) {
+  var html = '';
+  if (row.notes) {
+    html += '<div class="card-notes">' + renderMarkdown(row.notes) + '</div>';
+  }
+  detailEl.innerHTML = html;
+}
+
+function loadCollateral(todoId, detailEl) {
+  if (_collateralCache[todoId] !== undefined) {
+    renderCollateral(_collateralCache[todoId], detailEl);
+    return;
+  }
+
+  db.from('brainy_todo_collateral')
+    .select('id, filename, content_type, text_content, storage_path')
+    .eq('todo_id', todoId)
+    .then(function (result) {
+      var items = (result.error ? [] : result.data) || [];
+      _collateralCache[todoId] = items;
+      renderCollateral(items, detailEl);
+    });
+}
+
+function renderCollateral(items, detailEl) {
+  if (!items || items.length === 0) return;
+
+  var html = '<div class="card-collateral"><div class="collateral-label">Collateral</div>';
+
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (item.text_content) {
+      // Text collateral — render inline
+      var content;
+      if (item.content_type && item.content_type.match(/markdown/)) {
+        content = renderMarkdown(item.text_content);
+      } else {
+        content = '<pre>' + escapeHtml(item.text_content) + '</pre>';
+      }
+      html += '<div class="collateral-item">' +
+        '<div class="collateral-filename">' + escapeHtml(item.filename) + '</div>' +
+        '<div class="collateral-content">' + content + '</div>' +
+      '</div>';
+    } else if (item.storage_path) {
+      // Binary collateral — placeholder for signed URL
+      html += '<div class="collateral-item">' +
+        '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '">' +
+          escapeHtml(item.filename) +
+        '</span>' +
+      '</div>';
+    }
+  }
+
+  html += '</div>';
+  detailEl.innerHTML += html;
+
+  // Resolve signed URLs for binary items
+  resolveSignedUrls(detailEl);
+}
+
+function resolveSignedUrls(detailEl) {
+  var placeholders = detailEl.querySelectorAll('[data-storage-path]');
+  if (!placeholders || !placeholders.length) return;
+
+  for (var i = 0; i < placeholders.length; i++) {
+    (function (el) {
+      var storagePath = el.getAttribute('data-storage-path');
+      db.storage.from('brainy_files').createSignedUrl(storagePath, 3600)
+        .then(function (result) {
+          if (result.data && result.data.signedUrl) {
+            var a = document.createElement('a');
+            a.href = result.data.signedUrl;
+            a.target = '_blank';
+            a.className = 'collateral-file-link';
+            a.textContent = el.textContent;
+            if (el.parentNode && el.parentNode.replaceChild) {
+              el.parentNode.replaceChild(a, el);
+            }
+          }
+        });
+    })(placeholders[i]);
+  }
 }

@@ -117,6 +117,127 @@ main {
   flex-wrap: wrap;
 }
 
+/* ── Expand / Collapse ────────────────────────── */
+.card-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.65rem;
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-out);
+  flex-shrink: 0;
+}
+
+.card-toggle:hover {
+  color: var(--ink);
+}
+
+.card-expanded .card-toggle {
+  transform: rotate(90deg);
+}
+
+.card-detail {
+  display: none;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.card-expanded .card-detail {
+  display: block;
+}
+
+.card-notes {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+}
+
+.card-notes h1, .card-notes h2, .card-notes h3 {
+  font-family: var(--font-display);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.card-notes h1 { font-size: 1.1rem; }
+.card-notes h2 { font-size: 1rem; }
+.card-notes h3 { font-size: 0.92rem; }
+
+.card-notes p { margin: 0 0 0.5rem; }
+
+.card-notes pre {
+  background: rgba(107, 93, 79, 0.06);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+  overflow-x: auto;
+}
+
+.card-notes code {
+  background: rgba(107, 93, 79, 0.08);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.84rem;
+}
+
+/* ── Collateral ───────────────────────────────── */
+.card-collateral {
+  margin-top: 0.75rem;
+}
+
+.collateral-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-bottom: 0.4rem;
+}
+
+.collateral-item {
+  margin-bottom: 0.6rem;
+}
+
+.collateral-filename {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-light);
+  margin-bottom: 0.2rem;
+}
+
+.collateral-content {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.collateral-content pre {
+  background: rgba(107, 93, 79, 0.06);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.collateral-file-link {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--terracotta);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.collateral-file-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Empty state ──────────────────────────────── */
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
