@@ -100,27 +100,53 @@ function renderPathBreadcrumb(path) {
   return html;
 }
 
+function groupByTopLevel(items) {
+  if (!items || items.length === 0) return [];
+  var groups = [];
+  var groupMap = {};
+  for (var i = 0; i < items.length; i++) {
+    var parts = items[i].path.split('/');
+    var key = parts.length > 1 ? parts[0] : 'Other';
+    if (groupMap[key] === undefined) {
+      groupMap[key] = groups.length;
+      groups.push({ group: key, items: [] });
+    }
+    groups[groupMap[key]].items.push(items[i]);
+  }
+  return groups;
+}
+
 function renderKnowledge(items) {
   if (!items || items.length === 0) {
     cardsEl.innerHTML = '<div class="empty-state">No knowledge entries found.</div>';
     return;
   }
 
+  var groups = groupByTopLevel(items);
   var html = '';
-  for (var i = 0; i < items.length; i++) {
-    var k = items[i];
-    html += '<div class="card" data-knowledge-idx="' + i + '">' +
-      '<div class="card-header">' +
-        '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
-        '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
-        (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
-      '</div>' +
-      (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
-      (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
-      '<div class="card-meta">' +
-        '<span>' + escapeHtml(formatDate(k.updated_at)) + '</span>' +
-      '</div>' +
-    '</div>';
+  var flatIdx = 0;
+  for (var g = 0; g < groups.length; g++) {
+    var group = groups[g];
+    var label = group.group.charAt(0).toUpperCase() + group.group.slice(1);
+    html += '<div class="section-group">';
+    html += '<h2 class="section-heading">' + escapeHtml(label) + '</h2>';
+    for (var i = 0; i < group.items.length; i++) {
+      var k = group.items[i];
+      html += '<div class="card" data-knowledge-idx="' + flatIdx + '">' +
+        '<div class="card-header">' +
+          '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
+          '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
+          (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
+        '</div>' +
+        (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
+        (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
+        '<div class="card-meta">' +
+          '<span>' + escapeHtml(formatDate(k.updated_at)) + '</span>' +
+        '</div>' +
+      '</div>';
+      flatIdx++;
+    }
+    html += '</div>';
   }
   cardsEl.innerHTML = html;
 }

@@ -205,3 +205,156 @@ describe('buildCardHtml', function () {
     expect(html).not.toContain('card-summary');
   });
 });
+
+// --- groupByTopLevel ---
+
+describe('groupByTopLevel', function () {
+  function groupByTopLevel(items) {
+    if (!items || items.length === 0) return [];
+    var groups = [];
+    var groupMap = {};
+    for (var i = 0; i < items.length; i++) {
+      var parts = items[i].path.split('/');
+      var key = parts.length > 1 ? parts[0] : 'Other';
+      if (groupMap[key] === undefined) {
+        groupMap[key] = groups.length;
+        groups.push({ group: key, items: [] });
+      }
+      groups[groupMap[key]].items.push(items[i]);
+    }
+    return groups;
+  }
+
+  test('groups items by first path segment', function () {
+    var items = [
+      { path: 'tools/docker.yml' },
+      { path: 'tools/git.yml' },
+      { path: 'home/setup.yml' },
+    ];
+    var result = groupByTopLevel(items);
+    expect(result).toEqual([
+      { group: 'tools', items: [{ path: 'tools/docker.yml' }, { path: 'tools/git.yml' }] },
+      { group: 'home', items: [{ path: 'home/setup.yml' }] },
+    ]);
+  });
+
+  test('returns groups ordered by first appearance', function () {
+    var items = [
+      { path: 'home/a.yml' },
+      { path: 'tools/b.yml' },
+      { path: 'home/c.yml' },
+    ];
+    var result = groupByTopLevel(items);
+    expect(result[0].group).toBe('home');
+    expect(result[1].group).toBe('tools');
+  });
+
+  test('single-segment paths go into Other group', function () {
+    var items = [
+      { path: 'notes.yml' },
+      { path: 'tools/a.yml' },
+      { path: 'readme.yml' },
+    ];
+    var result = groupByTopLevel(items);
+    var otherGroup = result.find(function (g) { return g.group === 'Other'; });
+    expect(otherGroup).toBeDefined();
+    expect(otherGroup.items).toEqual([{ path: 'notes.yml' }, { path: 'readme.yml' }]);
+  });
+
+  test('empty input returns empty array', function () {
+    expect(groupByTopLevel([])).toEqual([]);
+    expect(groupByTopLevel(null)).toEqual([]);
+  });
+});
+
+// --- renderKnowledgeHtml grouping ---
+
+describe('renderKnowledgeHtml grouping', function () {
+  function groupByTopLevel(items) {
+    if (!items || items.length === 0) return [];
+    var groups = [];
+    var groupMap = {};
+    for (var i = 0; i < items.length; i++) {
+      var parts = items[i].path.split('/');
+      var key = parts.length > 1 ? parts[0] : 'Other';
+      if (groupMap[key] === undefined) {
+        groupMap[key] = groups.length;
+        groups.push({ group: key, items: [] });
+      }
+      groups[groupMap[key]].items.push(items[i]);
+    }
+    return groups;
+  }
+
+  function renderPathBreadcrumb(path) {
+    var parts = path.split('/');
+    var html = '';
+    for (var i = 0; i < parts.length; i++) {
+      if (i > 0) html += '<span class="path-separator">/</span>';
+      html += '<span class="path-segment">' + escapeHtml(parts[i]) + '</span>';
+    }
+    return html;
+  }
+
+  function renderKnowledge(items) {
+    if (!items || items.length === 0) {
+      return '<div class="empty-state">No knowledge entries found.</div>';
+    }
+    var groups = groupByTopLevel(items);
+    var html = '';
+    var flatIdx = 0;
+    for (var g = 0; g < groups.length; g++) {
+      var group = groups[g];
+      var label = group.group.charAt(0).toUpperCase() + group.group.slice(1);
+      html += '<div class="section-group">';
+      html += '<h2 class="section-heading">' + escapeHtml(label) + '</h2>';
+      for (var i = 0; i < group.items.length; i++) {
+        var k = group.items[i];
+        html += '<div class="card" data-knowledge-idx="' + flatIdx + '">' +
+          '<div class="card-header">' +
+            '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
+            '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
+            (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
+          '</div>' +
+          (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
+          (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
+          '<div class="card-meta">' +
+            '<span>' + escapeHtml(formatDate(k.updated_at)) + '</span>' +
+          '</div>' +
+        '</div>';
+        flatIdx++;
+      }
+      html += '</div>';
+    }
+    return html;
+  }
+
+  test('wraps groups in section-group with section-heading', function () {
+    var items = [
+      { path: 'tools/docker.yml', format: 'yaml', updated_at: '2025-01-01' },
+      { path: 'home/setup.yml', format: 'yaml', updated_at: '2025-01-01' },
+    ];
+    var html = renderKnowledge(items);
+    expect(html).toContain('section-group');
+    expect(html).toContain('section-heading');
+    expect(html).toContain('Tools');
+    expect(html).toContain('Home');
+  });
+
+  test('maintains correct flat index across groups', function () {
+    var items = [
+      { path: 'tools/a.yml', format: 'yaml', updated_at: '2025-01-01' },
+      { path: 'tools/b.yml', format: 'yaml', updated_at: '2025-01-01' },
+      { path: 'home/c.yml', format: 'yaml', updated_at: '2025-01-01' },
+    ];
+    var html = renderKnowledge(items);
+    expect(html).toContain('data-knowledge-idx="0"');
+    expect(html).toContain('data-knowledge-idx="1"');
+    expect(html).toContain('data-knowledge-idx="2"');
+  });
+
+  test('empty items shows empty state', function () {
+    var html = renderKnowledge([]);
+    expect(html).toContain('empty-state');
+  });
+});
