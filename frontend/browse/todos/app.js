@@ -194,7 +194,7 @@ function renderCollateral(items, detailEl) {
     if (item.text_content) {
       // Text collateral — render inline
       var content;
-      if (item.content_type && item.content_type.match(/markdown/)) {
+      if ((item.content_type && item.content_type.match(/markdown/)) || (item.filename && item.filename.match(/\.md$/i))) {
         content = renderMarkdown(item.text_content);
       } else {
         content = '<pre>' + escapeHtml(item.text_content) + '</pre>';

@@ -402,6 +402,38 @@ describe('todo cards - collateral', () => {
     expect(collateralCalls2).toBe(collateralCalls1);
   });
 
+  test('.md files render as markdown even without markdown content_type', async () => {
+    const collateral = [
+      { id: 'c3', filename: 'readme.md', content_type: 'text/plain', text_content: '# Title', storage_path: null },
+    ];
+    const env = loadApp(sampleTodos, collateral);
+    const { detailEl } = await signInAndExpand(env, 0);
+
+    expect(env.ctx.marked.parse).toHaveBeenCalledWith('# Title');
+    expect(detailEl.innerHTML).not.toContain('<pre>');
+  });
+
+  test('.md files render as markdown when content_type is null', async () => {
+    const collateral = [
+      { id: 'c4', filename: 'notes.MD', content_type: null, text_content: '**bold**', storage_path: null },
+    ];
+    const env = loadApp(sampleTodos, collateral);
+    const { detailEl } = await signInAndExpand(env, 0);
+
+    expect(env.ctx.marked.parse).toHaveBeenCalledWith('**bold**');
+    expect(detailEl.innerHTML).not.toContain('<pre>');
+  });
+
+  test('non-md text collateral without markdown content_type renders as pre', async () => {
+    const collateral = [
+      { id: 'c5', filename: 'data.txt', content_type: 'text/plain', text_content: 'plain text', storage_path: null },
+    ];
+    const env = loadApp(sampleTodos, collateral);
+    const { detailEl } = await signInAndExpand(env, 0);
+
+    expect(detailEl.innerHTML).toContain('<pre>');
+  });
+
   test('card with no collateral shows no collateral section', async () => {
     const env = loadApp(sampleTodos, []);
     const { detailEl } = await signInAndExpand(env, 0);

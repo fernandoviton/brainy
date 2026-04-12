@@ -223,6 +223,24 @@ main {
   line-height: 1.5;
 }
 
+.collateral-content h1, .collateral-content h2, .collateral-content h3 {
+  font-family: var(--font-display);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.collateral-content h1 { font-size: 1.1rem; }
+.collateral-content h2 { font-size: 1rem; }
+.collateral-content h3 { font-size: 0.92rem; }
+
+.collateral-content p { margin: 0 0 0.5rem; }
+
+.collateral-content ul, .collateral-content ol {
+  padding-left: 1.3rem;
+  margin: 0 0 0.5rem;
+}
+
+.collateral-content li { margin-bottom: 0.2rem; }
+
 .collateral-content pre {
   background: rgba(107, 93, 79, 0.06);
   border-radius: 6px;
@@ -230,6 +248,13 @@ main {
   font-size: 0.82rem;
   overflow-x: auto;
   white-space: pre-wrap;
+}
+
+.collateral-content code {
+  background: rgba(107, 93, 79, 0.08);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.84rem;
 }
 
 .collateral-file-link {
