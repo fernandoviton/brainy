@@ -171,6 +171,13 @@ main {
 
 .card-notes p { margin: 0 0 0.5rem; }
 
+.card-notes ul, .card-notes ol {
+  padding-left: 1.3rem;
+  margin: 0 0 0.5rem;
+}
+
+.card-notes li { margin-bottom: 0.2rem; }
+
 .card-notes pre {
   background: rgba(107, 93, 79, 0.06);
   border-radius: 6px;
