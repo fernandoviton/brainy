@@ -541,7 +541,7 @@ async function addCollateral(todoName, filepath) {
     const storagePath = `${userId}/${todo.id}/${filename}`;
     const { error: uploadErr } = await supabase.storage
       .from('brainy_files')
-      .upload(storagePath, fileBuffer);
+      .upload(storagePath, fileBuffer, { contentType });
     if (uploadErr) throw uploadErr;
 
     const { error } = await supabase.from('brainy_todo_collateral').insert({
