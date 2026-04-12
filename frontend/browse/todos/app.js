@@ -142,6 +142,24 @@ cardsEl.addEventListener('click', function (e) {
   loadDetail(todo.id, detail);
 });
 
+// Collateral box expand/collapse via event delegation
+cardsEl.addEventListener('click', function (e) {
+  var header = e.target.closest ? e.target.closest('.collateral-toggle') : null;
+  if (!header) {
+    // fallback for environments without closest
+    var el = e.target;
+    while (el && el !== cardsEl) {
+      if (el.className && el.className.indexOf('collateral-toggle') !== -1) { header = el; break; }
+      el = el.parentNode;
+    }
+  }
+  if (!header) return;
+  var box = header.parentNode;
+  if (!box) return;
+  var isOpen = box.className.indexOf('collateral-open') !== -1;
+  box.className = isOpen ? box.className.replace(' collateral-open', '') : box.className + ' collateral-open';
+});
+
 function loadDetail(todoId, detailEl) {
   if (_detailCache[todoId] !== undefined) {
     renderDetail(_detailCache[todoId], detailEl);
@@ -187,25 +205,28 @@ function loadCollateral(todoId, detailEl) {
 function renderCollateral(items, detailEl) {
   if (!items || items.length === 0) return;
 
-  var html = '<div class="card-collateral"><div class="collateral-label">Collateral</div>';
+  var html = '<div class="card-collateral">';
 
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     if (item.text_content) {
-      // Text collateral — render inline
+      // Text collateral — render in a bordered box with collapsible header
       var content;
       if ((item.content_type && item.content_type.match(/markdown/)) || (item.filename && item.filename.match(/\.md$/i))) {
         content = renderMarkdown(item.text_content);
       } else {
         content = '<pre>' + escapeHtml(item.text_content) + '</pre>';
       }
-      html += '<div class="collateral-item">' +
-        '<div class="collateral-filename">' + escapeHtml(item.filename) + '</div>' +
-        '<div class="collateral-content">' + content + '</div>' +
+      html += '<div class="collateral-box">' +
+        '<div class="collateral-box-header collateral-toggle">' +
+          '<span class="collateral-chevron">&#x25B6;</span>' +
+          '<span class="collateral-box-filename">' + escapeHtml(item.filename) + '</span>' +
+        '</div>' +
+        '<div class="collateral-box-body">' + content + '</div>' +
       '</div>';
     } else if (item.storage_path) {
-      // Binary collateral — placeholder for signed URL
-      html += '<div class="collateral-item">' +
+      // Binary collateral — file link in a box
+      html += '<div class="collateral-box collateral-box-link">' +
         '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '">' +
           escapeHtml(item.filename) +
         '</span>' +

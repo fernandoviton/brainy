@@ -350,7 +350,7 @@ describe('todo cards - collateral', () => {
     expect(env.collateralQuery.eq).toHaveBeenCalledWith('todo_id', 'uuid-1');
   });
 
-  test('text collateral renders inline', async () => {
+  test('text collateral renders inline in a bordered box with filename header', async () => {
     const collateral = [
       { id: 'c1', filename: 'notes.md', content_type: 'text/markdown', text_content: '# Hello', storage_path: null },
     ];
@@ -358,7 +358,12 @@ describe('todo cards - collateral', () => {
     const { detailEl } = await signInAndExpand(env, 0);
 
     expect(detailEl.innerHTML).toContain('card-collateral');
+    expect(detailEl.innerHTML).toContain('collateral-box');
+    expect(detailEl.innerHTML).toContain('collateral-box-header');
+    expect(detailEl.innerHTML).toContain('collateral-toggle');
     expect(detailEl.innerHTML).toContain('notes.md');
+    // No "COLLATERAL" label
+    expect(detailEl.innerHTML).not.toContain('collateral-label');
   });
 
   test('binary collateral renders as placeholder with storage path', async () => {
