@@ -1,6 +1,7 @@
 const mockStorage = {
   listCaptures: jest.fn(),
   listCaptureMedia: jest.fn(),
+  resolveCaptureId: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
   createSignedMediaUrls: jest.fn(),
@@ -91,16 +92,42 @@ describe('listCapturesWithMedia', () => {
 
 describe('getCapture', () => {
   test('delegates to storage', async () => {
-    const capture = { id: 'aaa', text: 'test', media: [{ filename: 'f.jpg' }] };
+    const fullId = 'aaa';
+    const capture = { id: fullId, text: 'test', media: [{ filename: 'f.jpg' }] };
+    mockStorage.resolveCaptureId.mockResolvedValue(fullId);
     mockStorage.getCapture.mockResolvedValue(capture);
 
-    const result = await captureService.getCapture('aaa');
+    const result = await captureService.getCapture(fullId);
 
-    expect(mockStorage.getCapture).toHaveBeenCalledWith('aaa');
+    expect(mockStorage.resolveCaptureId).toHaveBeenCalledWith(fullId);
+    expect(mockStorage.getCapture).toHaveBeenCalledWith(fullId);
     expect(result).toEqual(capture);
   });
 
+  test('resolves short ID before fetching', async () => {
+    const fullId = 'abcd1234-0000-0000-0000-000000000000';
+    const capture = { id: fullId, text: 'test', media: [] };
+    mockStorage.resolveCaptureId.mockResolvedValue(fullId);
+    mockStorage.getCapture.mockResolvedValue(capture);
+
+    const result = await captureService.getCapture('abcd1234');
+
+    expect(mockStorage.resolveCaptureId).toHaveBeenCalledWith('abcd1234');
+    expect(mockStorage.getCapture).toHaveBeenCalledWith(fullId);
+    expect(result).toEqual(capture);
+  });
+
+  test('returns null when short ID resolves to null', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue(null);
+
+    const result = await captureService.getCapture('deadbeef');
+
+    expect(mockStorage.getCapture).not.toHaveBeenCalled();
+    expect(result).toBeNull();
+  });
+
   test('filters out PDF when .pdf.md sibling exists', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',
@@ -117,6 +144,7 @@ describe('getCapture', () => {
   });
 
   test('keeps PDF when no .pdf.md sibling exists', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',
@@ -132,6 +160,7 @@ describe('getCapture', () => {
   });
 
   test('does not filter non-PDF files', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',
@@ -145,29 +174,25 @@ describe('getCapture', () => {
 
     expect(result.media).toHaveLength(2);
   });
-
-  test('returns null when capture not found', async () => {
-    mockStorage.getCapture.mockResolvedValue(null);
-
-    const result = await captureService.getCapture('nonexistent');
-
-    expect(result).toBeNull();
-  });
 });
 
 describe('processCapture', () => {
-  test('delegates directly to storage', async () => {
-    mockStorage.processCapture.mockResolvedValue({ id: 'aaa', processed: true });
+  test('resolves ID then delegates to storage', async () => {
+    const fullId = 'abcd1234-0000-0000-0000-000000000000';
+    mockStorage.resolveCaptureId.mockResolvedValue(fullId);
+    mockStorage.processCapture.mockResolvedValue({ id: fullId, processed: true });
 
-    const result = await captureService.processCapture('aaa');
+    const result = await captureService.processCapture('abcd1234');
 
-    expect(mockStorage.processCapture).toHaveBeenCalledWith('aaa');
-    expect(result).toEqual({ id: 'aaa', processed: true });
+    expect(mockStorage.resolveCaptureId).toHaveBeenCalledWith('abcd1234');
+    expect(mockStorage.processCapture).toHaveBeenCalledWith(fullId);
+    expect(result).toEqual({ id: fullId, processed: true });
   });
 });
 
 describe('getCaptureMediaUrls', () => {
   test('fetches capture then generates signed URLs for its media', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',
@@ -195,6 +220,7 @@ describe('getCaptureMediaUrls', () => {
   });
 
   test('returns empty array when capture has no media', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',
@@ -208,14 +234,16 @@ describe('getCaptureMediaUrls', () => {
   });
 
   test('returns null when capture not found', async () => {
-    mockStorage.getCapture.mockResolvedValue(null);
+    mockStorage.resolveCaptureId.mockResolvedValue(null);
 
     const result = await captureService.getCaptureMediaUrls('nonexistent');
 
+    expect(mockStorage.getCapture).not.toHaveBeenCalled();
     expect(result).toBeNull();
   });
 
   test('filters out PDF when .pdf.md sibling exists', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue('aaa');
     mockStorage.getCapture.mockResolvedValue({
       id: 'aaa',
       text: 'test',

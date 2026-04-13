@@ -380,6 +380,21 @@ async function listCaptures(all) {
   return data;
 }
 
+async function resolveCaptureId(id) {
+  if (id.length === 36) return id;
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from('brainy_captures')
+    .select('id')
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  const matches = data.filter(row => row.id.startsWith(id));
+  if (matches.length === 0) return null;
+  if (matches.length > 1) throw new Error(`Ambiguous capture ID prefix '${id}' — matches ${matches.length} captures`);
+  return matches[0].id;
+}
+
 async function getCapture(id) {
   const userId = await getUserId();
   const { data, error } = await supabase
@@ -676,6 +691,7 @@ module.exports = {
   listCaptures,
   listCaptureMedia,
   createSignedMediaUrls,
+  resolveCaptureId,
   getCapture,
   processCapture,
   downloadMedia,

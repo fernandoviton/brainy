@@ -139,6 +139,53 @@ describe('createSignedMediaUrls', () => {
   });
 });
 
+describe('resolveCaptureId', () => {
+  test('returns full UUID as-is without querying', async () => {
+    const fullId = 'abcd1234-0000-0000-0000-000000000000';
+
+    const result = await storage.resolveCaptureId(fullId);
+
+    expect(result).toBe(fullId);
+    expect(mockSupabase.supabase.from).not.toHaveBeenCalled();
+  });
+
+  test('returns full UUID when short prefix matches exactly one capture', async () => {
+    const fullId = 'abcd1234-0000-0000-0000-000000000000';
+    mockSupabase.setMockResult([
+      { id: fullId },
+      { id: 'eeee5678-0000-0000-0000-000000000000' },
+    ]);
+
+    const result = await storage.resolveCaptureId('abcd1234');
+
+    const from = mockSupabase.supabase.from;
+    expect(from).toHaveBeenCalledWith('brainy_captures');
+    const chain = from.mock.results[0].value;
+    expect(chain.select).toHaveBeenCalledWith('id');
+    expect(chain.eq).toHaveBeenCalledWith('user_id', 'test-user-id');
+    expect(result).toBe(fullId);
+  });
+
+  test('returns null when short prefix matches no captures', async () => {
+    mockSupabase.setMockResult([
+      { id: 'eeee5678-0000-0000-0000-000000000000' },
+    ]);
+
+    const result = await storage.resolveCaptureId('deadbeef');
+
+    expect(result).toBeNull();
+  });
+
+  test('throws when short prefix matches multiple captures', async () => {
+    mockSupabase.setMockResult([
+      { id: 'abcd1234-0000-0000-0000-000000000000' },
+      { id: 'abcd1234-1111-1111-1111-111111111111' },
+    ]);
+
+    await expect(storage.resolveCaptureId('abcd1234')).rejects.toThrow(/ambiguous/i);
+  });
+});
+
 describe('processCapture', () => {
   test('sets processed_at', async () => {
     mockSupabase.setMockResult({ id: 'aaa', processed_at: '2026-04-04T12:00:00Z' });

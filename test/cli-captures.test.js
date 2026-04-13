@@ -1,5 +1,6 @@
 const mockStorage = {
   listCaptures: jest.fn(),
+  resolveCaptureId: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
   downloadMedia: jest.fn(),

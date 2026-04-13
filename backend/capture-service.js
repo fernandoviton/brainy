@@ -33,18 +33,26 @@ async function listCapturesWithMedia(all) {
 }
 
 async function getCapture(id) {
-  const capture = await getStorage().getCapture(id);
+  const storage = getStorage();
+  const resolvedId = await storage.resolveCaptureId(id);
+  if (!resolvedId) return null;
+  const capture = await storage.getCapture(resolvedId);
   if (!capture) return null;
   return { ...capture, media: filterConvertedPdfs(capture.media) };
 }
 
 async function processCapture(id) {
-  return getStorage().processCapture(id);
+  const storage = getStorage();
+  const resolvedId = await storage.resolveCaptureId(id);
+  if (!resolvedId) return null;
+  return storage.processCapture(resolvedId);
 }
 
 async function getCaptureMediaUrls(id) {
   const storage = getStorage();
-  const capture = await storage.getCapture(id);
+  const resolvedId = await storage.resolveCaptureId(id);
+  if (!resolvedId) return null;
+  const capture = await storage.getCapture(resolvedId);
   if (!capture) return null;
 
   const filtered = filterConvertedPdfs(capture.media);
