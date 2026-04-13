@@ -110,14 +110,38 @@ function loadApp(queryOverrides) {
 }
 
 describe('browse captures - filter queries', () => {
-  test('all filter: does not add processed filter', async () => {
+  test('default load filters by unprocessed', async () => {
     const { authCallback, mockQuery } = loadApp();
     authCallback('SIGNED_IN', { user: { id: '123' } });
     await flushPromises();
 
-    // No processed filter should be added
+    expect(mockQuery.is).toHaveBeenCalledWith('processed_at', null);
+  });
+
+  test('all filter: does not add processed filter', async () => {
+    const { authCallback, mockQuery, dom } = loadApp();
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    // Reset and click "all" pill
+    mockQuery._filters = {};
+    mockQuery.is.mockClear();
+    mockQuery.not.mockClear();
+
+    const pill = {
+      classList: { contains: jest.fn(() => true), remove: jest.fn(), add: jest.fn() },
+      getAttribute: jest.fn(() => ''),
+    };
+    const processedGroup = dom.elements['processed-filter'];
+    processedGroup.querySelectorAll.mockReturnValue([pill]);
+
+    const clickHandler = dom.listeners['processed-filter:click'];
+    clickHandler({ target: pill });
+    await flushPromises();
+
     expect(mockQuery._filters).not.toHaveProperty('processed_at');
-    expect(mockQuery._filters).not.toHaveProperty('processed');
+    expect(mockQuery.is).not.toHaveBeenCalled();
+    expect(mockQuery.not).not.toHaveBeenCalled();
   });
 
   test('processed filter: filters by processed_at not null (is.not.null)', async () => {

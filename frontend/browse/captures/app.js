@@ -7,7 +7,7 @@ var logoutBtn = document.getElementById('logout-btn');
 var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 
-var _processedFilter = '';
+var _processedFilter = 'unprocessed';
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
