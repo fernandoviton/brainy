@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../.env'), quiet: true });
 const { createClient } = require('@supabase/supabase-js');
 
 const { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = process.env;
