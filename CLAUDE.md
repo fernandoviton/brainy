@@ -36,9 +36,15 @@ All three resources (**todo**, **capture**, **knowledge**) support `list` and `g
 
 | Resource    | Identifier | Extra actions                                       |
 |-------------|------------|-----------------------------------------------------|
-| todo        | `<name>`   | create, update, delete, archive, collateral (CRUD)  |
+| todo        | `<name>`   | create, update, delete, archive                     |
 | capture     | `<id>`     | media, process                                      |
 | knowledge   | `<path>`   | upsert `<path>` --stdin                             |
+
+**TODO collateral** (attachments on a TODO):
+- `todo collateral list <name>` — list attached files
+- `todo collateral get <name> <filename>` — read file content
+- `todo collateral add <name> <filepath>` — attach a file
+- `todo collateral remove <name> <filename>` — remove attachment
 
 Utilities: `check-integrity`, `promote-scheduled`
 
@@ -80,5 +86,9 @@ node tools/convert-capture-pdfs.js
 ```
 
 This batch script converts all unconverted PDFs across unprocessed captures. Run it before processing captures. The CLI automatically hides the original PDF when a `.pdf.md` sibling exists — always read the `.pdf.md` version instead.
+
+## Environment
+
+- **Shell is PowerShell**, not bash. Do not use `/dev/stdin`, `/dev/null`, `grep`, `awk`, or other Unix-isms. Use the CLI's built-in flags for filtering/formatting.
 
 For Brainy codebase development, see `DEVELOPMENT.md`.
