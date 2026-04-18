@@ -144,6 +144,9 @@ node backend/cli.js capture media <capture_id> --format json
 
 # Mark a capture as processed
 node backend/cli.js capture process <id>
+
+# Batch-convert all unconverted PDF media to Markdown (.pdf.md)
+node tools/convert-capture-pdfs.js
 ```
 
 ### Knowledge

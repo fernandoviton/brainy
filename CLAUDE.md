@@ -71,4 +71,14 @@ When a TODO is completed:
 - TODO names: `kebab-case` (e.g., `build-auth-system`)
 - Knowledge paths: `category/topic-name.yml` (e.g., `tools/docker/networking.yml`)
 
+## PDF Handling
+
+**Never read PDF files directly.** PDFs attached to captures are converted to Markdown (`.pdf.md`) using `marker-pdf` via:
+
+```bash
+node tools/convert-capture-pdfs.js
+```
+
+This batch script converts all unconverted PDFs across unprocessed captures. Run it before processing captures. The CLI automatically hides the original PDF when a `.pdf.md` sibling exists — always read the `.pdf.md` version instead.
+
 For Brainy codebase development, see `DEVELOPMENT.md`.

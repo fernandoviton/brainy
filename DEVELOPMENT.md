@@ -2,9 +2,22 @@
 
 Reference for modifying Brainy's own codebase (backend, CLI, tests, schema).
 
+## Setup
+
+```bash
+npm install
+python -m venv tools/.venv && tools/.venv/Scripts/pip install -r tools/requirements.txt
+```
+
 ## Development Practice
 
 - **TDD first**: Write or update tests before writing the fix/feature. Verify the test fails without the change, then implement the change and confirm the test passes.
+
+## Standalone scripts
+
+| Script | Purpose |
+|--------|---------|
+| `node tools/convert-capture-pdfs.js` | Batch-convert all unconverted PDF capture media to Markdown (`.pdf.md`) via `marker-pdf`. Run before processing captures. |
 
 ## Project layout
 

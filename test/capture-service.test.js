@@ -71,6 +71,22 @@ describe('listCapturesWithMedia', () => {
 
     expect(mockStorage.listCaptures).toHaveBeenCalledWith(true);
   });
+
+  test('filters out PDFs with .pdf.md siblings', async () => {
+    mockStorage.listCaptures.mockResolvedValue([
+      { id: 'aaa', text: 'first', processed_at: null, created_at: '2026-04-04T10:00:00Z' },
+    ]);
+    mockStorage.listCaptureMedia.mockResolvedValue([
+      { id: 'm1', capture_id: 'aaa', filename: 'report.pdf', content_type: 'application/pdf' },
+      { id: 'm2', capture_id: 'aaa', filename: 'report.pdf.md', content_type: 'text/markdown' },
+      { id: 'm3', capture_id: 'aaa', filename: 'photo.jpg', content_type: 'image/jpeg' },
+    ]);
+
+    const result = await captureService.listCapturesWithMedia();
+
+    expect(result[0].media).toHaveLength(2);
+    expect(result[0].media.map((m) => m.filename)).toEqual(['report.pdf.md', 'photo.jpg']);
+  });
 });
 
 describe('getCapture', () => {
@@ -83,10 +99,64 @@ describe('getCapture', () => {
     expect(mockStorage.getCapture).toHaveBeenCalledWith('aaa');
     expect(result).toEqual(capture);
   });
+
+  test('filters out PDF when .pdf.md sibling exists', async () => {
+    mockStorage.getCapture.mockResolvedValue({
+      id: 'aaa',
+      text: 'test',
+      media: [
+        { filename: 'report.pdf', content_type: 'application/pdf' },
+        { filename: 'report.pdf.md', content_type: 'text/markdown' },
+      ],
+    });
+
+    const result = await captureService.getCapture('aaa');
+
+    expect(result.media).toHaveLength(1);
+    expect(result.media[0].filename).toBe('report.pdf.md');
+  });
+
+  test('keeps PDF when no .pdf.md sibling exists', async () => {
+    mockStorage.getCapture.mockResolvedValue({
+      id: 'aaa',
+      text: 'test',
+      media: [
+        { filename: 'report.pdf', content_type: 'application/pdf' },
+      ],
+    });
+
+    const result = await captureService.getCapture('aaa');
+
+    expect(result.media).toHaveLength(1);
+    expect(result.media[0].filename).toBe('report.pdf');
+  });
+
+  test('does not filter non-PDF files', async () => {
+    mockStorage.getCapture.mockResolvedValue({
+      id: 'aaa',
+      text: 'test',
+      media: [
+        { filename: 'photo.jpg', content_type: 'image/jpeg' },
+        { filename: 'report.pdf.md', content_type: 'text/markdown' },
+      ],
+    });
+
+    const result = await captureService.getCapture('aaa');
+
+    expect(result.media).toHaveLength(2);
+  });
+
+  test('returns null when capture not found', async () => {
+    mockStorage.getCapture.mockResolvedValue(null);
+
+    const result = await captureService.getCapture('nonexistent');
+
+    expect(result).toBeNull();
+  });
 });
 
 describe('processCapture', () => {
-  test('delegates to storage', async () => {
+  test('delegates directly to storage', async () => {
     mockStorage.processCapture.mockResolvedValue({ id: 'aaa', processed: true });
 
     const result = await captureService.processCapture('aaa');
@@ -144,4 +214,25 @@ describe('getCaptureMediaUrls', () => {
 
     expect(result).toBeNull();
   });
+
+  test('filters out PDF when .pdf.md sibling exists', async () => {
+    mockStorage.getCapture.mockResolvedValue({
+      id: 'aaa',
+      text: 'test',
+      media: [
+        { id: 'm1', filename: 'report.pdf', storage_path: 'uid/captures/report.pdf', content_type: 'application/pdf' },
+        { id: 'm2', filename: 'report.pdf.md', storage_path: 'uid/captures/report.pdf.md', content_type: 'text/markdown' },
+      ],
+    });
+    mockStorage.createSignedMediaUrls.mockResolvedValue([
+      { path: 'uid/captures/report.pdf.md', signedUrl: 'https://example.com/signed/report.pdf.md' },
+    ]);
+
+    const result = await captureService.getCaptureMediaUrls('aaa');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].filename).toBe('report.pdf.md');
+    expect(mockStorage.createSignedMediaUrls).toHaveBeenCalledWith(['uid/captures/report.pdf.md']);
+  });
 });
+

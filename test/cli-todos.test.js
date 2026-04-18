@@ -2,6 +2,8 @@ const mockStorage = {
   listCaptures: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
+  downloadMedia: jest.fn(),
+  uploadCaptureMedia: jest.fn(),
   listTodos: jest.fn(),
   getTodo: jest.fn(),
   createTodo: jest.fn(),

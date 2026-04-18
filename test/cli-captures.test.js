@@ -2,6 +2,8 @@ const mockStorage = {
   listCaptures: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
+  downloadMedia: jest.fn(),
+  uploadCaptureMedia: jest.fn(),
   listTodos: jest.fn(),
   getTodo: jest.fn(),
   createTodo: jest.fn(),
@@ -152,6 +154,78 @@ describe('capture process', () => {
 
     expect(mockCaptureService.processCapture).toHaveBeenCalledWith('aaa');
     expect(output[0]).toContain('Processed');
+  });
+});
+
+describe('capture get - PDF filtering', () => {
+  test('shows .pdf.md but not the original PDF when both exist', async () => {
+    mockCaptureService.getCapture.mockResolvedValue({
+      id: 'abcd1234-0000-0000-0000-000000000000',
+      text: 'scanned doc',
+      processed_at: null,
+      created_at: '2026-04-04T10:00:00Z',
+      media: [{ filename: 'report.pdf.md' }],
+    });
+
+    const { output } = await runCLI(['capture', 'get', 'abcd1234-0000-0000-0000-000000000000']);
+
+    const joined = output.join('\n');
+    expect(joined).toContain('report.pdf.md');
+    expect(joined).not.toMatch(/\breport\.pdf\b(?!\.md)/);
+  });
+
+  test('shows PDF when no .pdf.md sibling exists', async () => {
+    mockCaptureService.getCapture.mockResolvedValue({
+      id: 'abcd1234-0000-0000-0000-000000000000',
+      text: 'raw pdf',
+      processed_at: null,
+      created_at: '2026-04-04T10:00:00Z',
+      media: [{ filename: 'report.pdf' }],
+    });
+
+    const { output } = await runCLI(['capture', 'get', 'abcd1234-0000-0000-0000-000000000000']);
+
+    expect(output.join('\n')).toContain('report.pdf');
+  });
+
+  test('shows non-PDF media alongside .pdf.md', async () => {
+    mockCaptureService.getCapture.mockResolvedValue({
+      id: 'abcd1234-0000-0000-0000-000000000000',
+      text: 'mixed media',
+      processed_at: null,
+      created_at: '2026-04-04T10:00:00Z',
+      media: [{ filename: 'photo.jpg' }, { filename: 'report.pdf.md' }],
+    });
+
+    const { output } = await runCLI(['capture', 'get', 'abcd1234-0000-0000-0000-000000000000']);
+
+    const joined = output.join('\n');
+    expect(joined).toContain('photo.jpg');
+    expect(joined).toContain('report.pdf.md');
+  });
+});
+
+describe('capture media - PDF filtering', () => {
+  test('shows .pdf.md URL but not original PDF when both exist', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue([
+      { filename: 'report.pdf.md', content_type: 'text/markdown', url: 'https://example.com/signed/report.pdf.md' },
+    ]);
+
+    const { output } = await runCLI(['capture', 'media', 'aaa']);
+
+    const joined = output.join('\n');
+    expect(joined).toContain('report.pdf.md');
+    expect(joined).not.toMatch(/\breport\.pdf\b(?!\.md)/);
+  });
+
+  test('shows PDF URL when no .pdf.md sibling exists', async () => {
+    mockCaptureService.getCaptureMediaUrls.mockResolvedValue([
+      { filename: 'report.pdf', content_type: 'application/pdf', url: 'https://example.com/signed/report.pdf' },
+    ]);
+
+    const { output } = await runCLI(['capture', 'media', 'aaa']);
+
+    expect(output.join('\n')).toContain('report.pdf');
   });
 });
 

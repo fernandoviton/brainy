@@ -436,6 +436,38 @@ async function processCapture(id) {
   return { id, processed: true };
 }
 
+async function downloadMedia(storagePath) {
+  const { data, error } = await supabase.storage
+    .from('brainy_files')
+    .download(storagePath);
+  if (error) throw error;
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+async function uploadCaptureMedia({ captureId, filename, contentType, buffer }) {
+  const userId = await getUserId();
+  const storagePath = `${userId}/captures/${captureId}/${filename}`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from('brainy_files')
+    .upload(storagePath, buffer, { contentType });
+  if (uploadErr) throw uploadErr;
+
+  const { error: insertErr } = await supabase
+    .from('brainy_capture_media')
+    .insert({
+      user_id: userId,
+      capture_id: captureId,
+      filename,
+      content_type: contentType,
+      storage_path: storagePath,
+    });
+  if (insertErr) throw insertErr;
+
+  return { filename, storage_path: storagePath };
+}
+
 // ---------------------------------------------------------------------------
 // Collateral
 // ---------------------------------------------------------------------------
@@ -646,6 +678,8 @@ module.exports = {
   createSignedMediaUrls,
   getCapture,
   processCapture,
+  downloadMedia,
+  uploadCaptureMedia,
   listCollateral,
   addCollateral,
   removeCollateral,

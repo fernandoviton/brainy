@@ -21,5 +21,8 @@ nul
 # Node
 node_modules/
 
+# Python venv
+tools/.venv/
+
 # Frontend local config
 frontend/config.local.js
