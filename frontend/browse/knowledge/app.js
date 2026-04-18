@@ -12,6 +12,7 @@ var _formatFilter = '';
 var _pathPrefix = '';
 var _debounceTimer = null;
 var _items = [];
+var _itemsByPath = {};
 var _detailCache = {};
 var _attachmentCache = {};
 
@@ -84,6 +85,8 @@ function loadKnowledge() {
       return;
     }
     _items = result.data || [];
+    _itemsByPath = {};
+    for (var i = 0; i < _items.length; i++) _itemsByPath[_items[i].path] = _items[i];
     _detailCache = {};
     _attachmentCache = {};
     renderKnowledge(_items);
@@ -124,7 +127,6 @@ function renderKnowledge(items) {
 
   var groups = groupByTopLevel(items);
   var html = '';
-  var flatIdx = 0;
   for (var g = 0; g < groups.length; g++) {
     var group = groups[g];
     var label = group.group.charAt(0).toUpperCase() + group.group.slice(1);
@@ -132,7 +134,7 @@ function renderKnowledge(items) {
     html += '<h2 class="section-heading">' + escapeHtml(label) + '</h2>';
     for (var i = 0; i < group.items.length; i++) {
       var k = group.items[i];
-      html += '<div class="card" data-knowledge-idx="' + flatIdx + '">' +
+      html += '<div class="card" data-knowledge-path="' + escapeHtml(k.path) + '">' +
         '<div class="card-header">' +
           '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
           '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
@@ -144,7 +146,6 @@ function renderKnowledge(items) {
           '<span>' + escapeHtml(formatDate(k.updated_at)) + '</span>' +
         '</div>' +
       '</div>';
-      flatIdx++;
     }
     html += '</div>';
   }
@@ -159,8 +160,8 @@ cardsEl.addEventListener('click', function (e) {
   var card = toggle.closest('.card');
   if (!card) return;
 
-  var idx = parseInt(card.getAttribute('data-knowledge-idx'), 10);
-  var item = _items[idx];
+  var path = card.getAttribute('data-knowledge-path');
+  var item = _itemsByPath[path];
   if (!item) return;
 
   var expanded = card.classList.toggle('card-expanded');
