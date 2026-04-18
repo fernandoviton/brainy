@@ -3,13 +3,15 @@
  *
  * 1. Open http://localhost:3000 in your browser
  * 2. Sign in with Google
- * 3. Copy the SUPABASE_REFRESH_TOKEN from the terminal into .env
+ * 3. The SUPABASE_REFRESH_TOKEN is written back to .env automatically
  *
  * Based on explore-supabase/js/02-auth-google.js
  */
+const fs = require('fs');
 const http = require('http');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const ENV_PATH = path.join(__dirname, '../.env');
+require('dotenv').config({ path: ENV_PATH });
 const { createClient } = require('@supabase/supabase-js');
 
 const { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = process.env;
@@ -56,6 +58,26 @@ const callbackHTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+function updateEnvToken(token) {
+  const line = `SUPABASE_REFRESH_TOKEN=${token}`;
+  let contents = '';
+  try {
+    contents = fs.readFileSync(ENV_PATH, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const re = /^SUPABASE_REFRESH_TOKEN=.*$/m;
+  if (re.test(contents)) {
+    contents = contents.replace(re, line);
+  } else {
+    if (contents.length && !contents.endsWith('\n')) contents += '\n';
+    contents += line + '\n';
+  }
+  fs.writeFileSync(ENV_PATH, contents);
+  console.log(`\nUpdated ${ENV_PATH}:`);
+  console.log(line);
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/') {
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -80,8 +102,7 @@ const server = http.createServer(async (req, res) => {
       const info = JSON.parse(body);
       console.log('\n--- Google OAuth complete ---');
       console.log(`Logged in as: ${info.email} (${info.user_id})`);
-      console.log(`\nAdd this to your .env file:\n`);
-      console.log(`SUPABASE_REFRESH_TOKEN=${info.refresh_token}`);
+      updateEnvToken(info.refresh_token);
       res.writeHead(200);
       res.end('ok');
       setTimeout(() => server.close(), 500);

@@ -34,7 +34,9 @@ In the Supabase dashboard:
 
 1. Go to **Authentication > Providers > Google**
 2. Enable Google and configure your OAuth credentials
-3. Add `http://localhost:3000/auth/callback` to **Redirect URLs** (under Authentication > URL Configuration)
+3. Under **Authentication > URL Configuration > Redirect URLs**, add:
+   - `http://localhost:3000/auth/callback` (for the CLI login)
+   - `https://<your-github-username>.github.io/brainy/**` (for the web UI — the `**` wildcard matches all subpaths like `/capture/` and `/browse/*/`)
 
 ### 4. Configure environment
 
@@ -54,7 +56,7 @@ node scripts/google-login.js
 
 This opens your browser for Google sign-in, then prints a `SUPABASE_REFRESH_TOKEN`. Add it to your `.env` file.
 
-To re-authenticate later (e.g., if the refresh token expires or is revoked):
+To re-authenticate later (e.g., if the refresh token expires or is revoked - you will see an error like "Invalid Refresh Token"):
 
 ```bash
 node scripts/refresh-token.js

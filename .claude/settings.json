@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/run_integrity_check.bat",
+            "command": ".claude/hooks/stop_check.bat",
             "timeout": 10
           }
         ]
