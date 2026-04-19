@@ -199,7 +199,7 @@ function loadAttachments(knowledgeId, detailEl) {
   }
 
   db.from('brainy_knowledge_attachments')
-    .select('id, filename, content_type, storage_path')
+    .select('id, filename, storage_path')
     .eq('knowledge_id', knowledgeId)
     .then(function (result) {
       var items = (result.error ? [] : result.data) || [];

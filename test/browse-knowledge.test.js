@@ -28,6 +28,31 @@ function formatDate() { return '2d ago'; }
 // by reimplementing the pure functions here and verifying them,
 // then the actual app.js will use the same logic.
 
+// --- attachments query columns (regression: 400 from selecting non-existent content_type) ---
+
+describe('attachments query in app.js', function () {
+  const fs = require('fs');
+  const path = require('path');
+  const appSrc = fs.readFileSync(
+    path.join(__dirname, '..', 'frontend', 'browse', 'knowledge', 'app.js'),
+    'utf8'
+  );
+
+  test('select list for brainy_knowledge_attachments only references real schema columns', function () {
+    // Extract the .select(...) call that follows the attachments table reference.
+    var re = /from\(['"]brainy_knowledge_attachments['"]\)\s*\.select\(['"]([^'"]+)['"]\)/;
+    var m = appSrc.match(re);
+    expect(m).not.toBeNull();
+
+    var columns = m[1].split(',').map(function (s) { return s.trim(); });
+    // Schema columns from sql/setup.sql:
+    var allowed = ['id', 'user_id', 'knowledge_id', 'path', 'filename', 'storage_path', 'created_at'];
+    for (var i = 0; i < columns.length; i++) {
+      expect(allowed).toContain(columns[i]);
+    }
+  });
+});
+
 // --- renderMarkdown ---
 
 describe('renderMarkdown', function () {
