@@ -276,6 +276,16 @@ describe('browse todos - auth-event dedupe', () => {
 
 // ── Step 1: Expand/collapse toggle + notes display ──────────────
 
+describe('browse todos - default filter', () => {
+  test('initial load filters by status=active', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(env.mockQuery.eq).toHaveBeenCalledWith('status', 'active');
+  });
+});
+
 describe('todo cards - expand/collapse', () => {
   test('initial load selects only summary columns, not *', async () => {
     const env = loadApp(sampleTodos);

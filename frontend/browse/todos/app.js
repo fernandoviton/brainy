@@ -7,7 +7,7 @@ var logoutBtn = document.getElementById('logout-btn');
 var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 
-var _statusFilter = '';
+var _statusFilter = 'active';
 var _priorityFilter = '';
 var _todos = [];
 var _detailCache = {};
