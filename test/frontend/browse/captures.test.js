@@ -4,6 +4,10 @@ const vm = require('vm');
 
 const flushPromises = () => new Promise(process.nextTick);
 
+const utilsCode = fs.readFileSync(
+  path.join(__dirname, '../../../frontend/utils.js'),
+  'utf8'
+);
 const appCode = fs.readFileSync(
   path.join(__dirname, '../../../frontend/browse/captures/app.js'),
   'utf8'
@@ -73,6 +77,12 @@ function buildMockDOM() {
     elements,
     listeners,
     getElementById: jest.fn((id) => elements[id]),
+    createElement: jest.fn(() => {
+      let _text = '';
+      const el = { innerHTML: '', appendChild: jest.fn((child) => { el.innerHTML = child._text || ''; }) };
+      return el;
+    }),
+    createTextNode: jest.fn((text) => ({ _text: String(text) })),
   };
 }
 
@@ -104,10 +114,34 @@ function loadApp(queryOverrides) {
     console: { error: jest.fn() },
   };
   vm.createContext(ctx);
+  vm.runInContext(utilsCode, ctx);
   vm.runInContext(appCode, ctx);
 
   return { ctx, dom, mockAuth, mockFrom, mockQuery, authCallback };
 }
+
+describe('browse captures - badge rendering', () => {
+  test('processed capture shows badge-processed/Processed, unprocessed shows badge-unprocessed/Unprocessed', async () => {
+    const fixtures = [
+      { id: '1', text: 'done', processed_at: '2026-04-01T00:00:00Z', brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+      { id: '2', text: 'pending', processed_at: null, brainy_capture_media: [], created_at: '2026-04-02T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = dom.elements['cards'].innerHTML;
+    expect(html).toContain('badge-processed');
+    expect(html).toContain('Processed');
+    expect(html).toContain('badge-unprocessed');
+    expect(html).toContain('Unprocessed');
+  });
+});
 
 describe('browse captures - filter queries', () => {
   test('default load filters by unprocessed', async () => {

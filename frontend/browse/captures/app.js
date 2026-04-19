@@ -82,8 +82,8 @@ function renderCaptures(captures) {
   for (var i = 0; i < captures.length; i++) {
     var c = captures[i];
     var media = c.brainy_capture_media || [];
-    var processedClass = c.processed ? 'badge-processed' : 'badge-unprocessed';
-    var processedLabel = c.processed ? 'Processed' : 'Unprocessed';
+    var processedClass = c.processed_at ? 'badge-processed' : 'badge-unprocessed';
+    var processedLabel = c.processed_at ? 'Processed' : 'Unprocessed';
 
     html += '<div class="card">' +
       (c.text ? '<div class="card-text">' + escapeHtml(truncate(c.text, 300)) + '</div>' : '') +
