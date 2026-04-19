@@ -25,12 +25,17 @@ function renderMarkdown(text) {
   return escapeHtml(text);
 }
 
+var _loadedUserId = null;
 db.auth.onAuthStateChange(function (event, session) {
   if (session) {
     authSection.style.display = 'none';
     contentSection.style.display = 'block';
-    loadTodos();
+    if (session.user && session.user.id !== _loadedUserId) {
+      _loadedUserId = session.user.id;
+      loadTodos();
+    }
   } else {
+    _loadedUserId = null;
     authSection.style.display = 'block';
     contentSection.style.display = 'none';
   }

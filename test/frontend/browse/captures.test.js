@@ -120,6 +120,37 @@ function loadApp(queryOverrides) {
   return { ctx, dom, mockAuth, mockFrom, mockQuery, authCallback };
 }
 
+describe('browse captures - auth-event dedupe', () => {
+  test('repeated auth events for same user do not re-fetch captures', async () => {
+    const { authCallback, mockFrom } = loadApp();
+    const session = { user: { id: 'user-1' } };
+
+    authCallback('INITIAL_SESSION', session);
+    await flushPromises();
+    authCallback('SIGNED_IN', session);
+    await flushPromises();
+    authCallback('TOKEN_REFRESHED', session);
+    await flushPromises();
+
+    const captureCalls = mockFrom.mock.calls.filter((c) => c[0] === 'brainy_captures');
+    expect(captureCalls).toHaveLength(1);
+  });
+
+  test('signing in as a different user does re-fetch', async () => {
+    const { authCallback, mockFrom } = loadApp();
+
+    authCallback('SIGNED_IN', { user: { id: 'user-1' } });
+    await flushPromises();
+    authCallback('SIGNED_OUT', null);
+    await flushPromises();
+    authCallback('SIGNED_IN', { user: { id: 'user-2' } });
+    await flushPromises();
+
+    const captureCalls = mockFrom.mock.calls.filter((c) => c[0] === 'brainy_captures');
+    expect(captureCalls).toHaveLength(2);
+  });
+});
+
 describe('browse captures - badge rendering', () => {
   test('processed capture shows badge-processed/Processed, unprocessed shows badge-unprocessed/Unprocessed', async () => {
     const fixtures = [

@@ -243,6 +243,37 @@ async function signInAndExpand(env, cardIdx) {
   return { card, detailEl, clickHandlers };
 }
 
+describe('browse todos - auth-event dedupe', () => {
+  test('repeated auth events for same user do not re-fetch todos', async () => {
+    const env = loadApp(sampleTodos);
+    const session = { user: { id: 'user-1' } };
+
+    env.authCallback('INITIAL_SESSION', session);
+    await flushPromises();
+    env.authCallback('SIGNED_IN', session);
+    await flushPromises();
+    env.authCallback('TOKEN_REFRESHED', session);
+    await flushPromises();
+
+    const todoCalls = env.mockFrom.mock.calls.filter((c) => c[0] === 'brainy_todos');
+    expect(todoCalls).toHaveLength(1);
+  });
+
+  test('signing in as a different user does re-fetch', async () => {
+    const env = loadApp(sampleTodos);
+
+    env.authCallback('SIGNED_IN', { user: { id: 'user-1' } });
+    await flushPromises();
+    env.authCallback('SIGNED_OUT', null);
+    await flushPromises();
+    env.authCallback('SIGNED_IN', { user: { id: 'user-2' } });
+    await flushPromises();
+
+    const todoCalls = env.mockFrom.mock.calls.filter((c) => c[0] === 'brainy_todos');
+    expect(todoCalls).toHaveLength(2);
+  });
+});
+
 // ── Step 1: Expand/collapse toggle + notes display ──────────────
 
 describe('todo cards - expand/collapse', () => {
