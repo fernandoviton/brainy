@@ -94,7 +94,6 @@ create table if not exists brainy_knowledge (
   path text not null,
   topic text,
   summary text,
-  format text check (format in ('yaml', 'markdown')),
   content text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),

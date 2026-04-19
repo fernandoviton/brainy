@@ -17,7 +17,7 @@ Determine:
 
 ### 2. Route to the right file
 
-Knowledge is stored in a Supabase database, organized by path (e.g., `tools/docker/networking.yml`, `programming/python/dataclasses.yml`).
+Knowledge is stored in a Supabase database, organized by path (e.g., `tools/docker/networking.md`, `programming/python/dataclasses.md`).
 
 **To find or create the right file:**
 
@@ -42,33 +42,28 @@ node backend/cli.js knowledge get <path> --format json
 
 To write/update:
 ```bash
-echo "<full YAML content>" | node backend/cli.js knowledge upsert --path "<category/topic-name.yml>" --stdin
+echo "<full markdown content>" | node backend/cli.js knowledge upsert "<category/topic-name.md>" --topic "<topic>" --summary "<one-line summary>" --stdin
 ```
 
-Every knowledge file uses this schema:
+Every knowledge file is a markdown document. `--topic` and `--summary` are CLI flags — the only source of truth for those fields (do not write `topic:` / `summary:` preambles into the body). Example body:
 
-```yaml
-topic: docker-networking
-summary: Docker container networking modes and configuration
+```markdown
+## Configuration
 
-# Structured fields — extracted from input when present
-# Field names are flexible per domain, but use consistent names
-# across similar items. Common examples:
-#   model, brand, location, url, cost
-#   replacement_interval, last_replaced, last_serviced
-#   installed, expires, account_number
-# Use YYYY-MM-DD for dates, human-readable strings for intervals.
+| | |
+|---|---|
+| Default driver | bridge |
+| CLI flag | `--network` |
 
-notes:
-  - date: 2026-02-15
-    content: "Bridge mode is the default network driver."
+## Notes
+
+**2026-02-15** — Bridge mode is the default network driver.
 ```
 
 **Rules:**
-- `topic` and `summary` are always present
-- Other top-level fields are **structured and script-parseable** — add them when the input contains concrete facts (model numbers, dates, intervals, etc.)
-- Use **consistent field names** across similar items (e.g., all replaceable items get `replacement_interval` + `last_replaced`)
-- `notes` is an **append-only log** for context that doesn't fit structured fields
+- Always pass `--topic` and `--summary` flags
+- Use tables, lists, and prose — not fenced yaml blocks
+- Append a new dated entry under `## Notes` when updating rather than editing prior entries
 
 **When updating an existing file:**
 - Update structured fields if the input provides newer/better values

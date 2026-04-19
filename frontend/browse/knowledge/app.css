@@ -154,18 +154,6 @@ main {
   align-items: center;
 }
 
-.badge-format {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: rgba(107, 93, 79, 0.1);
-  color: var(--ink-light);
-}
-
 /* ── Expand / Collapse ────────────────────────── */
 .card-toggle {
   display: inline-flex;

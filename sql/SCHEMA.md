@@ -25,14 +25,14 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 │  name       text NN      │  │  path      text NN    │
 │  summary    text         │  │  topic     text       │
 │  status     text NN      │  │  summary   text       │
-│    {inbox,active,        │  │  format    text       │
-│     later,scheduled}     │  │    {yaml,markdown}    │
-│  priority   text         │  │  content   text       │
-│    {P0,P1,P2,P3}         │  │  created_at tstz      │
-│  category   text         │  │  updated_at tstz      │
-│  created_date date       │  │                       │
-│  due          date       │  │  UQ(user_id, path)    │
-│  scheduled_date date     │  └───────────┬───────────┘
+│    {inbox,active,        │  │  content   text       │
+│     later,scheduled}     │  │  created_at tstz      │
+│  priority   text         │  │  updated_at tstz      │
+│    {P0,P1,P2,P3}         │  │                       │
+│  category   text         │  │  UQ(user_id, path)    │
+│  created_date date       │  └───────────┬───────────┘
+│  due          date       │              │
+│  scheduled_date date     │              │
 │  blocked_by text[]       │              │ knowledge_id FK
 │  notes      text         │              │ (cascade delete)
 │  created_at timestamptz  │  ┌────────────────────────────────┐

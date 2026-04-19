@@ -75,7 +75,7 @@ When a TODO is completed:
 ## Naming Conventions
 
 - TODO names: `kebab-case` (e.g., `build-auth-system`)
-- Knowledge paths: `category/topic-name.yml` (e.g., `tools/docker/networking.yml`)
+- Knowledge paths: `category/topic-name.md` (e.g., `tools/docker/networking.md`)
 
 ## PDF Handling
 

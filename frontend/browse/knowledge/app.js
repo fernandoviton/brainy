@@ -8,7 +8,6 @@ var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 var pathSearch = document.getElementById('path-search');
 
-var _formatFilter = '';
 var _pathPrefix = '';
 var _debounceTimer = null;
 var _items = [];
@@ -50,17 +49,6 @@ logoutBtn.addEventListener('click', function () {
   db.auth.signOut();
 });
 
-// Format filter pills
-var formatGroup = document.getElementById('format-filter');
-formatGroup.addEventListener('click', function (e) {
-  if (!e.target.classList.contains('pill')) return;
-  var pills = formatGroup.querySelectorAll('.pill');
-  for (var i = 0; i < pills.length; i++) pills[i].classList.remove('active');
-  e.target.classList.add('active');
-  _formatFilter = e.target.getAttribute('data-value');
-  loadKnowledge();
-});
-
 // Debounced path search
 pathSearch.addEventListener('input', function () {
   clearTimeout(_debounceTimer);
@@ -72,12 +60,11 @@ pathSearch.addEventListener('input', function () {
 
 function loadKnowledge() {
   var query = db.from('brainy_knowledge')
-    .select('id, path, topic, summary, format, updated_at')
+    .select('id, path, topic, summary, updated_at')
     .order('path')
     .limit(100);
 
   if (_pathPrefix) query = query.like('path', _pathPrefix + '%');
-  if (_formatFilter) query = query.eq('format', _formatFilter);
 
   query.then(function (result) {
     if (result.error) {
@@ -138,7 +125,6 @@ function renderKnowledge(items) {
         '<div class="card-header">' +
           '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
           '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
-          (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
         '</div>' +
         (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
         (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
@@ -186,7 +172,7 @@ function loadDetail(item, detailEl) {
   }
 
   db.from('brainy_knowledge')
-    .select('id, content, format')
+    .select('id, content')
     .eq('id', item.id)
     .then(function (result) {
       var row = (!result.error && result.data && result.data[0]) ? result.data[0] : {};
@@ -199,11 +185,7 @@ function loadDetail(item, detailEl) {
 function renderDetail(row, detailEl) {
   var html = '';
   if (row.content) {
-    if (row.format === 'yaml') {
-      html += '<div class="card-content"><pre>' + escapeHtml(row.content) + '</pre></div>';
-    } else {
-      html += '<div class="card-content">' + renderMarkdown(row.content) + '</div>';
-    }
+    html += '<div class="card-content">' + renderMarkdown(row.content) + '</div>';
   } else {
     html += '<div class="detail-empty">No content.</div>';
   }

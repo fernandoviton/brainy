@@ -161,10 +161,10 @@ node backend/cli.js knowledge list
 node backend/cli.js knowledge list --prefix "tools/"
 
 # Read a knowledge file
-node backend/cli.js knowledge get tools/docker/networking.yml
+node backend/cli.js knowledge get tools/docker/networking.md
 
 # Create or update a knowledge file
-echo "topic: my-topic" | node backend/cli.js knowledge upsert --path "category/my-topic.yml" --stdin
+echo "# My topic" | node backend/cli.js knowledge upsert "category/my-topic.md" --topic my-topic --summary "one-line summary" --stdin
 ```
 
 ### Maintenance

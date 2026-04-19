@@ -209,7 +209,7 @@ async function listKnowledge(prefix) {
   const userId = await getUserId();
   let query = supabase
     .from('brainy_knowledge')
-    .select('path, topic, format')
+    .select('path, topic, summary')
     .eq('user_id', userId)
     .order('path');
 
@@ -223,7 +223,7 @@ async function listKnowledge(prefix) {
   return data.map((row) => ({
     path: row.path,
     topic: row.topic || '',
-    format: row.format || 'markdown',
+    summary: row.summary || '',
   }));
 }
 
@@ -244,21 +244,20 @@ async function getKnowledge(knowledgePath) {
   return {
     path: data.path,
     topic: data.topic || '',
-    format: data.format || 'markdown',
+    summary: data.summary || '',
     content: data.content || '',
   };
 }
 
-async function upsertKnowledge({ path: knowledgePath, content, topic, format }) {
+async function upsertKnowledge({ path: knowledgePath, content, topic, summary }) {
   const userId = await getUserId();
-  const ext = knowledgePath.split('.').pop().toLowerCase();
 
   const row = {
     user_id: userId,
     path: knowledgePath,
     content,
     topic: topic || knowledgePath.split('/').pop().replace(/\.[^.]+$/, ''),
-    format: format || (ext === 'yml' || ext === 'yaml' ? 'yaml' : 'markdown'),
+    summary: summary ?? null,
   };
 
   const { error } = await supabase

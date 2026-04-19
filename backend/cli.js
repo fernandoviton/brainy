@@ -56,7 +56,8 @@ Actions:
 Actions:
   list [--prefix <path>]       List knowledge entries, optionally filtered by path prefix
   get <path>                   Get knowledge content
-  upsert <path> --stdin        Create or update knowledge (content via stdin)`,
+  upsert <path> --stdin        Create or update knowledge (content via stdin)
+           [--topic <t>] [--summary <s>]`,
 };
 
 function showHelp(resource) {
@@ -111,7 +112,7 @@ function output(data, format) {
         const mediaCount = item.media?.length ? ` [${item.media.length} file${item.media.length !== 1 ? 's' : ''}]` : '';
         console.log(`- [${short}] ${text} [${status}]${mediaCount} ${item.created_at}`);
       } else if (item.path) {
-        console.log(`  ${item.path} (${item.format})`);
+        console.log(`  ${item.path}`);
       } else {
         console.log(JSON.stringify(item));
       }
@@ -314,7 +315,7 @@ async function main() {
           path: upsertPath,
           content,
           topic: args.topic,
-          format: args.format,
+          summary: args.summary,
         });
         console.log(`Upserted: ${result.path}`);
       } else {

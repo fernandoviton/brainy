@@ -56,32 +56,23 @@ describe('renderMarkdown', function () {
 describe('renderDetailHtml', function () {
   function renderDetailHtml(row) {
     if (!row.content) return '<div class="detail-empty">No content.</div>';
-    if (row.format === 'yaml') {
-      return '<div class="card-content"><pre>' + escapeHtml(row.content) + '</pre></div>';
-    }
     // markdown — for test, simulate rendered
     return '<div class="card-content">' + '<p>' + row.content + '</p>' + '</div>';
   }
 
-  test('YAML content wrapped in <pre>', function () {
-    var html = renderDetailHtml({ content: 'key: value', format: 'yaml' });
-    expect(html).toContain('<pre>');
-    expect(html).toContain('key: value');
-  });
-
   test('markdown content rendered as HTML', function () {
-    var html = renderDetailHtml({ content: 'hello world', format: 'markdown' });
+    var html = renderDetailHtml({ content: 'hello world' });
     expect(html).toContain('<p>hello world</p>');
     expect(html).not.toContain('<pre>');
   });
 
   test('empty content shows message', function () {
-    var html = renderDetailHtml({ content: '', format: 'yaml' });
+    var html = renderDetailHtml({ content: '' });
     expect(html).toContain('No content');
   });
 
   test('null content shows message', function () {
-    var html = renderDetailHtml({ content: null, format: 'markdown' });
+    var html = renderDetailHtml({ content: null });
     expect(html).toContain('No content');
   });
 });
@@ -153,7 +144,6 @@ describe('buildCardHtml', function () {
       '<div class="card-header">' +
         '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
         '<span class="card-path">' + renderPathBreadcrumb(item.path) + '</span>' +
-        (item.format ? '<span class="badge-format">' + escapeHtml(item.format) + '</span>' : '') +
       '</div>' +
       (item.topic ? '<div class="card-topic">' + escapeHtml(item.topic) + '</div>' : '') +
       (item.summary ? '<div class="card-summary">' + escapeHtml(truncate(item.summary, 200)) + '</div>' : '') +
@@ -164,34 +154,33 @@ describe('buildCardHtml', function () {
   }
 
   test('includes card-toggle button', function () {
-    var html = buildCardHtml({ path: 'tools/docker.yml', format: 'yaml', updated_at: '2025-01-01' });
+    var html = buildCardHtml({ path: 'tools/docker.md', updated_at: '2025-01-01' });
     expect(html).toContain('card-toggle');
     expect(html).toContain('aria-label="Expand"');
   });
 
   test('includes data-knowledge-path matching the item path', function () {
-    var html = buildCardHtml({ path: 'home/bedding/pillowcases.yml', format: 'yaml', updated_at: '2025-01-01' });
-    expect(html).toContain('data-knowledge-path="home/bedding/pillowcases.yml"');
+    var html = buildCardHtml({ path: 'home/bedding/pillowcases.md', updated_at: '2025-01-01' });
+    expect(html).toContain('data-knowledge-path="home/bedding/pillowcases.md"');
     expect(html).not.toContain('data-knowledge-idx');
   });
 
   test('renders path breadcrumb with separator', function () {
-    var html = buildCardHtml({ path: 'tools/docker/networking.yml', format: 'yaml', updated_at: '2025-01-01' });
+    var html = buildCardHtml({ path: 'tools/docker/networking.md', updated_at: '2025-01-01' });
     expect(html).toContain('path-separator');
     expect(html).toContain('path-segment');
     expect(html).toContain('docker');
-    expect(html).toContain('networking.yml');
+    expect(html).toContain('networking.md');
   });
 
-  test('includes format badge', function () {
-    var html = buildCardHtml({ path: 'a.yml', format: 'yaml', updated_at: '2025-01-01' });
-    expect(html).toContain('badge-format');
-    expect(html).toContain('yaml');
+  test('does not include format badge', function () {
+    var html = buildCardHtml({ path: 'a.md', updated_at: '2025-01-01' });
+    expect(html).not.toContain('badge-format');
   });
 
   test('includes topic and summary when present', function () {
     var html = buildCardHtml({
-      path: 'a.yml', format: 'yaml', topic: 'Docker Networking',
+      path: 'a.md', topic: 'Docker Networking',
       summary: 'How to configure bridge networks', updated_at: '2025-01-01'
     });
     expect(html).toContain('card-topic');
@@ -201,7 +190,7 @@ describe('buildCardHtml', function () {
   });
 
   test('omits topic and summary when absent', function () {
-    var html = buildCardHtml({ path: 'a.yml', format: 'yaml', updated_at: '2025-01-01' });
+    var html = buildCardHtml({ path: 'a.md', updated_at: '2025-01-01' });
     expect(html).not.toContain('card-topic');
     expect(html).not.toContain('card-summary');
   });
@@ -228,22 +217,22 @@ describe('groupByTopLevel', function () {
 
   test('groups items by first path segment', function () {
     var items = [
-      { path: 'tools/docker.yml' },
-      { path: 'tools/git.yml' },
-      { path: 'home/setup.yml' },
+      { path: 'tools/docker.md' },
+      { path: 'tools/git.md' },
+      { path: 'home/setup.md' },
     ];
     var result = groupByTopLevel(items);
     expect(result).toEqual([
-      { group: 'tools', items: [{ path: 'tools/docker.yml' }, { path: 'tools/git.yml' }] },
-      { group: 'home', items: [{ path: 'home/setup.yml' }] },
+      { group: 'tools', items: [{ path: 'tools/docker.md' }, { path: 'tools/git.md' }] },
+      { group: 'home', items: [{ path: 'home/setup.md' }] },
     ]);
   });
 
   test('returns groups ordered by first appearance', function () {
     var items = [
-      { path: 'home/a.yml' },
-      { path: 'tools/b.yml' },
-      { path: 'home/c.yml' },
+      { path: 'home/a.md' },
+      { path: 'tools/b.md' },
+      { path: 'home/c.md' },
     ];
     var result = groupByTopLevel(items);
     expect(result[0].group).toBe('home');
@@ -252,14 +241,14 @@ describe('groupByTopLevel', function () {
 
   test('single-segment paths go into Other group', function () {
     var items = [
-      { path: 'notes.yml' },
-      { path: 'tools/a.yml' },
-      { path: 'readme.yml' },
+      { path: 'notes.md' },
+      { path: 'tools/a.md' },
+      { path: 'readme.md' },
     ];
     var result = groupByTopLevel(items);
     var otherGroup = result.find(function (g) { return g.group === 'Other'; });
     expect(otherGroup).toBeDefined();
-    expect(otherGroup.items).toEqual([{ path: 'notes.yml' }, { path: 'readme.yml' }]);
+    expect(otherGroup.items).toEqual([{ path: 'notes.md' }, { path: 'readme.md' }]);
   });
 
   test('empty input returns empty array', function () {
@@ -314,7 +303,6 @@ describe('renderKnowledgeHtml grouping', function () {
           '<div class="card-header">' +
             '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
             '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +
-            (k.format ? '<span class="badge-format">' + escapeHtml(k.format) + '</span>' : '') +
           '</div>' +
           (k.topic ? '<div class="card-topic">' + escapeHtml(k.topic) + '</div>' : '') +
           (k.summary ? '<div class="card-summary">' + escapeHtml(truncate(k.summary, 200)) + '</div>' : '') +
@@ -337,8 +325,8 @@ describe('renderKnowledgeHtml grouping', function () {
 
   test('wraps groups in section-group with section-heading', function () {
     var items = [
-      { path: 'tools/docker.yml', format: 'yaml', updated_at: '2025-01-01' },
-      { path: 'home/setup.yml', format: 'yaml', updated_at: '2025-01-01' },
+      { path: 'tools/docker.md', updated_at: '2025-01-01' },
+      { path: 'home/setup.md', updated_at: '2025-01-01' },
     ];
     var html = renderKnowledge(items);
     expect(html).toContain('section-group');
@@ -349,24 +337,24 @@ describe('renderKnowledgeHtml grouping', function () {
 
   test('each card is tagged with its own path', function () {
     var items = [
-      { path: 'tools/a.yml', format: 'yaml', updated_at: '2025-01-01' },
-      { path: 'tools/b.yml', format: 'yaml', updated_at: '2025-01-01' },
-      { path: 'home/c.yml', format: 'yaml', updated_at: '2025-01-01' },
+      { path: 'tools/a.md', updated_at: '2025-01-01' },
+      { path: 'tools/b.md', updated_at: '2025-01-01' },
+      { path: 'home/c.md', updated_at: '2025-01-01' },
     ];
     var html = renderKnowledge(items);
-    expect(html).toContain('data-knowledge-path="tools/a.yml"');
-    expect(html).toContain('data-knowledge-path="tools/b.yml"');
-    expect(html).toContain('data-knowledge-path="home/c.yml"');
+    expect(html).toContain('data-knowledge-path="tools/a.md"');
+    expect(html).toContain('data-knowledge-path="tools/b.md"');
+    expect(html).toContain('data-knowledge-path="home/c.md"');
   });
 
   test('card lookup by path resolves to the correct item when groups reorder (regression: pillowcases showed window-coverings content)', function () {
     // Input order matches supabase path-sort; grouping reorders visually so
     // positional-index lookup into the original array returns the wrong item.
     var items = [
-      { path: 'family.md', format: 'markdown', updated_at: '2025-01-01' },
-      { path: 'home/bedding/pillowcases.yml', format: 'yaml', updated_at: '2025-01-01' },
-      { path: 'home/window-coverings/window-coverings.md', format: 'markdown', updated_at: '2025-01-01' },
-      { path: 'README.md', format: 'markdown', updated_at: '2025-01-01' },
+      { path: 'family.md', updated_at: '2025-01-01' },
+      { path: 'home/bedding/pillowcases.md', updated_at: '2025-01-01' },
+      { path: 'home/window-coverings/window-coverings.md', updated_at: '2025-01-01' },
+      { path: 'README.md', updated_at: '2025-01-01' },
     ];
     var html = renderKnowledge(items);
 
@@ -388,13 +376,13 @@ describe('renderKnowledgeHtml grouping', function () {
     // pillowcases must carry the pillowcases path — not window-coverings.
     var pillowCard = null;
     for (var j = 0; j < cards.length; j++) {
-      if (cards[j].innerHTML.indexOf('pillowcases.yml') !== -1) {
+      if (cards[j].innerHTML.indexOf('pillowcases.md') !== -1) {
         pillowCard = cards[j];
         break;
       }
     }
     expect(pillowCard).not.toBeNull();
-    expect(pillowCard.getAttribute('data-knowledge-path')).toBe('home/bedding/pillowcases.yml');
+    expect(pillowCard.getAttribute('data-knowledge-path')).toBe('home/bedding/pillowcases.md');
   });
 
   test('empty items shows empty state', function () {
