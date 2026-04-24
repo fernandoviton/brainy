@@ -48,7 +48,16 @@ All three resources (**todo**, **capture**, **knowledge**) support `list` and `g
 
 Utilities: `check-integrity`, `promote-scheduled`
 
-Run `node backend/cli.js <resource> help` for full flag details.
+**Common command shapes** (so you don't need `--help` for routine work):
+- `todo list [--status <status>]`
+- `todo get <name>`
+- `todo create --name <n> --summary <s> [--status <s>] [--priority <p>] [--due <date>]`
+- `todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin]`
+- `todo archive <name> --summary-text "<t>" --completion-date <YYYY-MM-DD>`
+- `capture list [--all]` · `capture get <id>` · `capture process <id>`
+- `knowledge list [--prefix <path>]` · `knowledge get <path>` · `knowledge upsert <path> --stdin [--summary <s>]`
+
+Run `node backend/cli.js <resource> --help` for anything not listed above.
 
 ### TODO Statuses
 - `inbox` — Newly captured, not yet triaged
