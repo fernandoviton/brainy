@@ -49,7 +49,7 @@ All three resources (**todo**, **capture**, **knowledge**) support `list` and `g
 Utilities: `check-integrity`, `promote-scheduled`
 
 **Common command shapes** (so you don't need `--help` for routine work):
-- `todo list [--status <status>]`
+- `todo list [--status <status>] [--all]` — defaults to active; `--all` returns every status
 - `todo get <name>`
 - `todo create --name <n> --summary <s> [--status <s>] [--priority <p>] [--due <date>]`
 - `todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin]`

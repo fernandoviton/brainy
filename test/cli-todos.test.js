@@ -120,6 +120,35 @@ describe('todo get — no has_folder', () => {
 });
 
 // ---------------------------------------------------------------------------
+// todo list — default to active, --all returns all
+// ---------------------------------------------------------------------------
+describe('todo list — default status filter', () => {
+  test('with no flags, defaults to status=active', async () => {
+    mockStorage.listTodos.mockResolvedValue([]);
+    await runCLI(['todo', 'list']);
+    expect(mockStorage.listTodos).toHaveBeenCalledWith('active');
+  });
+
+  test('--all returns all statuses (no status filter)', async () => {
+    mockStorage.listTodos.mockResolvedValue([]);
+    await runCLI(['todo', 'list', '--all']);
+    expect(mockStorage.listTodos).toHaveBeenCalledWith(undefined);
+  });
+
+  test('--status <s> overrides default', async () => {
+    mockStorage.listTodos.mockResolvedValue([]);
+    await runCLI(['todo', 'list', '--status', 'inbox']);
+    expect(mockStorage.listTodos).toHaveBeenCalledWith('inbox');
+  });
+
+  test('--status with --all uses explicit status', async () => {
+    mockStorage.listTodos.mockResolvedValue([]);
+    await runCLI(['todo', 'list', '--all', '--status', 'later']);
+    expect(mockStorage.listTodos).toHaveBeenCalledWith('later');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Chunk 2: notes_snapshot removed from archive
 // ---------------------------------------------------------------------------
 describe('todo archive — no notes_snapshot', () => {

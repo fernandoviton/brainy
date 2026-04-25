@@ -22,7 +22,7 @@ All commands support --format json for machine-readable output.`,
   todo: `Usage: node backend/cli.js todo <action> [options]
 
 Actions:
-  list [--status <status>]                         List TODOs, optionally filtered by status
+  list [--status <status>] [--all]                 List active TODOs (default); --all for all statuses, --status to filter
   get <name>                                       Get full TODO details (notes, collateral)
   create --name <n> --summary <s> [--status <s>]   Create a new TODO
            [--priority <p>] [--category <c>]
@@ -166,7 +166,8 @@ async function main() {
     if (resource === 'todo') {
       if (!action || action === 'help') { showHelp('todo'); return; }
       if (action === 'list') {
-        const result = await storage.listTodos(args.status || undefined);
+        const status = args.status || (args.all ? undefined : 'active');
+        const result = await storage.listTodos(status);
         output(result, format);
       } else if (action === 'get') {
         const name = rest[0] || args.name;
