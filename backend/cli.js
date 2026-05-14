@@ -36,7 +36,7 @@ Actions:
   archive <name> [--summary-text <t>]              Archive a completed TODO
            [--completion-date <d>]
   collateral list <name>                           List collateral files
-  collateral add <name> <filepath>                 Attach a file
+  collateral add <name> <filepath> [--replace]    Attach a file (--replace to overwrite existing)
   collateral remove <name> <filename>              Remove an attachment
   collateral get <name> <filename>                 Get collateral content
 
@@ -224,9 +224,10 @@ async function main() {
         } else if (subAction === 'add') {
           const name = subRest[0];
           const filepath = subRest[1];
-          if (!name || !filepath) { console.error('Usage: todo collateral add <name> <filepath>'); process.exit(1); }
-          const result = await storage.addCollateral(name, filepath);
-          console.log(`Added: ${result.filename} (${result.content_type}) [${result.is_text ? 'text' : 'binary'}]`);
+          if (!name || !filepath) { console.error('Usage: todo collateral add <name> <filepath> [--replace]'); process.exit(1); }
+          const result = await storage.addCollateral(name, filepath, { replace: !!args.replace });
+          const verb = result.replaced ? 'Replaced' : 'Added';
+          console.log(`${verb}: ${result.filename} (${result.content_type}) [${result.is_text ? 'text' : 'binary'}]`);
         } else if (subAction === 'remove') {
           const name = subRest[0];
           const filename = subRest[1];

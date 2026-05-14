@@ -555,7 +555,7 @@ function detectContentType(filepath) {
   return EXT_TO_CONTENT_TYPE[ext] || 'application/octet-stream';
 }
 
-async function addCollateral(todoName, filepath) {
+async function addCollateral(todoName, filepath, { replace = false } = {}) {
   const fs = require('fs/promises');
   const path = require('path');
   const userId = await getUserId();
@@ -571,34 +571,61 @@ async function addCollateral(todoName, filepath) {
   const filename = path.basename(filepath);
   const contentType = detectContentType(filepath);
 
+  const { data: existing, error: existingErr } = await supabase
+    .from('brainy_todo_collateral')
+    .select('id, storage_path')
+    .eq('todo_id', todo.id)
+    .eq('filename', filename)
+    .maybeSingle();
+  if (existingErr) throw existingErr;
+  if (existing && !replace) {
+    throw new Error(`Collateral '${filename}' already exists for todo '${todoName}'. Use --replace to overwrite.`);
+  }
+
   if (isTextType(contentType)) {
     const textContent = await fs.readFile(filepath, 'utf-8');
-    const { error } = await supabase.from('brainy_todo_collateral').insert({
-      user_id: userId,
-      todo_id: todo.id,
-      filename,
-      content_type: contentType,
-      text_content: textContent,
-    });
-    if (error) throw error;
-    return { filename, content_type: contentType, is_text: true };
+    if (existing) {
+      const { error } = await supabase
+        .from('brainy_todo_collateral')
+        .update({ content_type: contentType, text_content: textContent, storage_path: null })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('brainy_todo_collateral').insert({
+        user_id: userId,
+        todo_id: todo.id,
+        filename,
+        content_type: contentType,
+        text_content: textContent,
+      });
+      if (error) throw error;
+    }
+    return { filename, content_type: contentType, is_text: true, replaced: !!existing };
   } else {
     const fileBuffer = await fs.readFile(filepath);
     const storagePath = `${userId}/${todo.id}/${filename}`;
     const { error: uploadErr } = await supabase.storage
       .from('brainy_files')
-      .upload(storagePath, fileBuffer, { contentType });
+      .upload(storagePath, fileBuffer, { contentType, upsert: true });
     if (uploadErr) throw uploadErr;
 
-    const { error } = await supabase.from('brainy_todo_collateral').insert({
-      user_id: userId,
-      todo_id: todo.id,
-      filename,
-      content_type: contentType,
-      storage_path: storagePath,
-    });
-    if (error) throw error;
-    return { filename, content_type: contentType, is_text: false };
+    if (existing) {
+      const { error } = await supabase
+        .from('brainy_todo_collateral')
+        .update({ content_type: contentType, storage_path: storagePath, text_content: null })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('brainy_todo_collateral').insert({
+        user_id: userId,
+        todo_id: todo.id,
+        filename,
+        content_type: contentType,
+        storage_path: storagePath,
+      });
+      if (error) throw error;
+    }
+    return { filename, content_type: contentType, is_text: false, replaced: !!existing };
   }
 }
 

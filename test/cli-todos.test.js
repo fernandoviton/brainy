@@ -206,13 +206,30 @@ describe('todo collateral list', () => {
 // Chunk 4: todo collateral add
 // ---------------------------------------------------------------------------
 describe('todo collateral add', () => {
-  test('calls addCollateral and prints result', async () => {
-    mockStorage.addCollateral.mockResolvedValue({ filename: 'notes.md', content_type: 'text/markdown', is_text: true });
+  test('calls addCollateral with replace=false and prints Added', async () => {
+    mockStorage.addCollateral.mockResolvedValue({ filename: 'notes.md', content_type: 'text/markdown', is_text: true, replaced: false });
 
     const { output } = await runCLI(['todo', 'collateral', 'add', 'fix-bug', '/tmp/notes.md']);
-    expect(mockStorage.addCollateral).toHaveBeenCalledWith('fix-bug', '/tmp/notes.md');
-    expect(output[0]).toContain('Added');
+    expect(mockStorage.addCollateral).toHaveBeenCalledWith('fix-bug', '/tmp/notes.md', { replace: false });
+    expect(output[0]).toMatch(/^Added:/);
     expect(output[0]).toContain('notes.md');
+  });
+
+  test('--replace passes replace=true and prints Replaced', async () => {
+    mockStorage.addCollateral.mockResolvedValue({ filename: 'notes.md', content_type: 'text/markdown', is_text: true, replaced: true });
+
+    const { output } = await runCLI(['todo', 'collateral', 'add', 'fix-bug', '/tmp/notes.md', '--replace']);
+    expect(mockStorage.addCollateral).toHaveBeenCalledWith('fix-bug', '/tmp/notes.md', { replace: true });
+    expect(output[0]).toMatch(/^Replaced:/);
+    expect(output[0]).toContain('notes.md');
+  });
+
+  test('duplicate without --replace exits with error mentioning --replace', async () => {
+    mockStorage.addCollateral.mockRejectedValue(new Error("Collateral 'notes.md' already exists for todo 'fix-bug'. Use --replace to overwrite."));
+
+    const { errors, exitCode } = await runCLI(['todo', 'collateral', 'add', 'fix-bug', '/tmp/notes.md']);
+    expect(exitCode).toBe(1);
+    expect(errors.join('\n')).toContain('--replace');
   });
 
   test('missing args exits with error', async () => {
