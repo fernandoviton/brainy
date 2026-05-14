@@ -72,6 +72,7 @@ function buildMockDOM() {
   makeEl('cards');
   makeEl('status-msg');
   makeEl('processed-filter');
+  makeEl('text-search');
 
   return {
     elements,
@@ -171,6 +172,36 @@ describe('browse captures - badge rendering', () => {
     expect(html).toContain('Processed');
     expect(html).toContain('badge-unprocessed');
     expect(html).toContain('Unprocessed');
+  });
+});
+
+describe('browse captures - live search', () => {
+  test('typing in #text-search filters cards client-side without re-querying', async () => {
+    const fixtures = [
+      { id: '1', text: 'buy milk', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+      { id: '2', text: 'call dentist', processed_at: null, brainy_capture_media: [], created_at: '2026-04-02T00:00:00Z' },
+    ];
+    const { authCallback, dom, mockFrom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const beforeCount = mockFrom.mock.calls.filter((c) => c[0] === 'brainy_captures').length;
+
+    const searchEl = dom.elements['text-search'];
+    searchEl.value = 'dentist';
+    const handler = dom.listeners['text-search:input'];
+    handler();
+
+    const afterCount = mockFrom.mock.calls.filter((c) => c[0] === 'brainy_captures').length;
+    expect(afterCount).toBe(beforeCount);
+
+    const cardCount = (s) => (s.match(/class="card"/g) || []).length;
+    expect(cardCount(dom.elements['cards'].innerHTML)).toBe(1);
   });
 });
 

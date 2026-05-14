@@ -96,6 +96,25 @@ main {
 .badge-status-active   { background: rgba(139, 154, 126, 0.2); color: #4A6340; }
 .badge-status-later    { background: rgba(196, 101, 42, 0.12); color: #A04420; }
 .badge-status-scheduled { background: rgba(107, 93, 79, 0.08); color: var(--ink-light); }
+.badge-status-archived { background: rgba(107, 93, 79, 0.15); color: var(--ink-light); }
+
+#text-search {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--paper-white);
+  color: var(--ink);
+}
+
+.archived-empty-note {
+  font-style: italic;
+  color: var(--ink-light);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
 
 .badge-priority-P0 { background: #C4652A; color: #fff; }
 .badge-priority-P1 { background: rgba(196, 101, 42, 0.18); color: #A04420; }

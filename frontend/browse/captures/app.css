@@ -2,6 +2,17 @@ main {
   max-width: 720px;
 }
 
+#text-search {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--paper-white);
+  color: var(--ink);
+}
+
 /* ── Filters ───────────────────────────────────── */
 #filters {
   margin-bottom: 1.25rem;

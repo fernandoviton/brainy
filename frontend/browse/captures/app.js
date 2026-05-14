@@ -6,8 +6,10 @@ var loginBtn = document.getElementById('login-btn');
 var logoutBtn = document.getElementById('logout-btn');
 var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
+var searchEl = document.getElementById('text-search');
 
 var _processedFilter = 'unprocessed';
+var _captures = [];
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
@@ -53,6 +55,7 @@ processedGroup.addEventListener('click', function (e) {
 });
 
 function loadCaptures() {
+  if (searchEl) searchEl.value = '';
   var query = db.from('brainy_captures')
     .select('*, brainy_capture_media(filename, content_type, storage_path)')
     .order('created_at', { ascending: false })
@@ -66,8 +69,13 @@ function loadCaptures() {
       showStatus('Failed to load: ' + result.error.message, 'status-error');
       return;
     }
-    renderCaptures(result.data);
+    _captures = result.data || [];
+    renderCaptures(_captures);
   });
+}
+
+if (searchEl) {
+  setupLiveSearch(searchEl, function () { return _captures; }, ['text'], renderCaptures);
 }
 
 function getSignedUrl(storagePath) {

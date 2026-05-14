@@ -65,7 +65,7 @@ function buildMockDOM() {
   makeEl('logout-btn');
   makeEl('cards');
   makeEl('status-msg');
-  makeEl('path-search');
+  makeEl('text-search');
 
   return {
     elements,
@@ -76,8 +76,8 @@ function buildMockDOM() {
   };
 }
 
-function loadApp() {
-  const mockFrom = jest.fn().mockImplementation(() => buildMockQuery([]));
+function loadApp(rows) {
+  const mockFrom = jest.fn().mockImplementation(() => buildMockQuery(rows || []));
   let authCallback;
   const mockAuth = {
     onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
@@ -106,6 +106,67 @@ function loadApp() {
 
   return { ctx, dom, mockAuth, mockFrom, getAuthCallback: () => authCallback };
 }
+
+describe('browse knowledge - live search', () => {
+  const sampleRows = [
+    { id: '1', path: 'tools/docker/networking.md', topic: 'Docker networking', summary: 'How docker networks work', updated_at: '2026-04-01T00:00:00Z' },
+    { id: '2', path: 'tools/git/rebase.md', topic: 'Git rebase', summary: 'Rebase patterns', updated_at: '2026-04-02T00:00:00Z' },
+    { id: '3', path: 'food/recipes/pasta.md', topic: 'Pasta', summary: 'Italian pasta', updated_at: '2026-04-03T00:00:00Z' },
+  ];
+
+  test('typing in #text-search filters cards client-side without re-querying', async () => {
+    const env = loadApp(sampleRows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    const beforeCount = env.mockFrom.mock.calls.filter((c) => c[0] === 'brainy_knowledge').length;
+
+    const searchEl = env.dom.elements['text-search'];
+    searchEl.value = 'docker';
+    const handler = env.dom.listeners['text-search:input'];
+    handler();
+
+    const afterCount = env.mockFrom.mock.calls.filter((c) => c[0] === 'brainy_knowledge').length;
+    expect(afterCount).toBe(beforeCount);
+
+    // Mock escapeHtml strips text content, so count cards by class marker
+    const cardCount = (s) => (s.match(/class="card"/g) || []).length;
+    expect(cardCount(env.dom.elements['cards'].innerHTML)).toBe(1);
+  });
+
+  test('initial query limit raised from 100 to 500', async () => {
+    const env = loadApp([]);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+    // The query chain's .limit was called with the configured KNOWLEDGE_LIMIT
+    // We can verify indirectly: 500 must be the value the app passed.
+    expect(env.ctx.KNOWLEDGE_LIMIT).toBe(500);
+  });
+
+  test('"showing first 500" indicator renders when row count hits the limit', async () => {
+    const rows = [];
+    for (let i = 0; i < 500; i++) {
+      rows.push({ id: String(i), path: 'a/' + i, topic: 't', summary: 's', updated_at: '2026-04-01T00:00:00Z' });
+    }
+    const env = loadApp(rows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('knowledge-limit-note');
+    expect(html).toContain('500');
+  });
+
+  test('does not call .like (server-side prefix search removed)', async () => {
+    const env = loadApp(sampleRows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    // The chain.like spy should never have been invoked
+    const chain = env.mockFrom.mock.results[0].value;
+    expect(chain.like).not.toHaveBeenCalled();
+  });
+});
 
 describe('browse knowledge - auth-event dedupe', () => {
   test('repeated auth events for same user do not re-fetch knowledge', async () => {

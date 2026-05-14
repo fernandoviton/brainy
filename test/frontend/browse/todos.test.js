@@ -107,6 +107,8 @@ function buildMockDOM() {
   makeEl('status-msg');
   makeEl('status-filter');
   makeEl('priority-filter');
+  const searchEl = makeEl('text-search');
+  searchEl.value = '';
 
   return {
     elements,
@@ -489,6 +491,137 @@ describe('todo cards - collateral', () => {
 });
 
 // ── Step 4: Signed URLs for binary collateral ───────────────────
+
+// ── Step 5: Archived pill ───────────────────────────────────────
+
+describe('browse todos - archived pill', () => {
+  function loadAppWithArchive(archiveRows) {
+    const liveQuery = buildMockQuery([]);
+    const archiveQuery = buildMockQuery(archiveRows || []);
+    const mockFrom = jest.fn().mockImplementation(function (table) {
+      if (table === 'brainy_archive_entries') return archiveQuery;
+      return liveQuery;
+    });
+    let authCallback;
+    const mockAuth = {
+      onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
+      signInWithOAuth: jest.fn(),
+      signOut: jest.fn().mockResolvedValue({}),
+    };
+    const mockCreateClient = jest.fn().mockReturnValue({
+      auth: mockAuth, from: mockFrom,
+      storage: { from: jest.fn().mockReturnValue({ createSignedUrl: jest.fn().mockResolvedValue({ data: null }) }) },
+    });
+    const dom = buildMockDOM();
+    const ctx = {
+      CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
+      supabase: { createClient: mockCreateClient },
+      document: dom,
+      window: { location: { origin: 'https://example.com', pathname: '/browse/todos/' } },
+      console: { error: jest.fn() },
+      parseInt: parseInt,
+      marked: { parse: jest.fn((t) => '<p>' + t + '</p>') },
+      DOMPurify: { sanitize: jest.fn((h) => h) },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(utilsCode, ctx);
+    vm.runInContext(appCode, ctx);
+    return { ctx, dom, mockFrom, liveQuery, archiveQuery, authCallback };
+  }
+
+  function clickStatusPill(env, value) {
+    const handler = env.dom.listeners['status-filter:click'][0];
+    const pill = {
+      classList: { contains: jest.fn(() => true), remove: jest.fn(), add: jest.fn() },
+      getAttribute: jest.fn(() => value),
+    };
+    env.dom.elements['status-filter'].querySelectorAll = jest.fn(() => [pill]);
+    handler({ target: pill });
+  }
+
+  test('clicking Archived pill queries brainy_archive_entries', async () => {
+    const env = loadAppWithArchive([]);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    clickStatusPill(env, 'archived');
+    await flushPromises();
+
+    expect(env.mockFrom).toHaveBeenCalledWith('brainy_archive_entries');
+  });
+
+  test('archived rows render with archived status badge', async () => {
+    const archiveRows = [{
+      id: 'a1', todo_name: 'old-task', completion_date: '2026-04-01',
+      year_month: '2026_04', summary_text: 'Done.',
+      todo_snapshot: { priority: 'P1', category: 'dev' },
+      collateral_snapshot: null,
+    }];
+    const env = loadAppWithArchive(archiveRows);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+    clickStatusPill(env, 'archived');
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('badge-status-archived');
+    expect(html).toContain('old-task');
+  });
+
+  test('archived snapshot collateral renders without re-querying brainy_todo_collateral', async () => {
+    const archiveRows = [{
+      id: 'a1', todo_name: 'old-task', completion_date: '2026-04-01',
+      year_month: '2026_04', summary_text: 'Done.',
+      todo_snapshot: { priority: 'P1' },
+      collateral_snapshot: [
+        { filename: 'note.md', content_type: 'text/markdown', text_content: '# hi', storage_path: null },
+      ],
+    }];
+    const env = loadAppWithArchive(archiveRows);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+    clickStatusPill(env, 'archived');
+    await flushPromises();
+
+    const beforeExpand = env.mockFrom.mock.calls.filter(c => c[0] === 'brainy_todo_collateral').length;
+
+    const clickHandlers = env.dom.listeners['cards:click'];
+    const card = makeMockCard(0);
+    clickHandlers[0]({ target: makeMockToggle(card) });
+    await flushPromises();
+
+    const afterExpand = env.mockFrom.mock.calls.filter(c => c[0] === 'brainy_todo_collateral').length;
+    expect(afterExpand).toBe(beforeExpand);
+
+    const detailEl = card.appendChild.mock.calls[0][0];
+    expect(detailEl.innerHTML).toContain('note.md');
+  });
+});
+
+// ── Step 6: Live search ─────────────────────────────────────────
+
+describe('browse todos - live search', () => {
+  test('typing in #text-search filters loaded cards without re-querying', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const beforeCount = env.mockFrom.mock.calls.filter(c => c[0] === 'brainy_todos').length;
+
+    const searchEl = env.dom.elements['text-search'];
+    searchEl.value = 'login';
+    const handler = env.dom.listeners['text-search:input'][0];
+    handler();
+    await flushPromises();
+
+    const afterCount = env.mockFrom.mock.calls.filter(c => c[0] === 'brainy_todos').length;
+    expect(afterCount).toBe(beforeCount);
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('fix-bug');
+    expect(html).not.toContain('write-docs');
+  });
+});
 
 describe('todo cards - signed URLs', () => {
   test('binary collateral triggers createSignedUrl', async () => {

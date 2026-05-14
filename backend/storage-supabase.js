@@ -158,10 +158,14 @@ async function archiveTodo(name, { summaryText, completionDate }) {
     .single();
   if (fetchErr) throw fetchErr;
 
-  // Get collateral
+  // Get collateral — preserve enough to render archived items identically
+  // to live ones: filename, content_type, storage_path (for binary blobs,
+  // which persist in storage past the cascade delete), text_content (for
+  // text-only rows, which would otherwise be lost when the metadata row
+  // is deleted).
   const { data: collateral } = await supabase
     .from('brainy_todo_collateral')
-    .select('filename, content_type, storage_path')
+    .select('filename, content_type, storage_path, text_content')
     .eq('todo_id', todo.id);
 
   // Create archive entry
@@ -172,7 +176,7 @@ async function archiveTodo(name, { summaryText, completionDate }) {
     year_month: yearMonth,
     summary_text: summaryText || 'Completed.',
     todo_snapshot: { ...todo, id: undefined, user_id: undefined },
-    collateral_snapshot: collateral?.length > 0 ? collateral.map((c) => c.filename) : null,
+    collateral_snapshot: collateral?.length > 0 ? collateral : null,
   });
   if (archiveErr) throw archiveErr;
 

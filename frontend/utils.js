@@ -26,6 +26,23 @@ function truncate(str, maxLen) {
 }
 
 // eslint-disable-next-line no-unused-vars
+function setupLiveSearch(inputEl, getItems, fields, onFiltered) {
+  inputEl.addEventListener('input', function () {
+    var q = inputEl.value.trim().toLowerCase();
+    var items = getItems() || [];
+    if (!q) { onFiltered(items); return; }
+    var filtered = items.filter(function (item) {
+      for (var i = 0; i < fields.length; i++) {
+        var v = item[fields[i]];
+        if (v && String(v).toLowerCase().indexOf(q) !== -1) return true;
+      }
+      return false;
+    });
+    onFiltered(filtered);
+  });
+}
+
+// eslint-disable-next-line no-unused-vars
 function escapeHtml(str) {
   if (!str) return '';
   var div = document.createElement('div');

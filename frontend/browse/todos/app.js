@@ -6,12 +6,14 @@ var loginBtn = document.getElementById('login-btn');
 var logoutBtn = document.getElementById('logout-btn');
 var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
+var searchEl = document.getElementById('text-search');
 
 var _statusFilter = 'active';
 var _priorityFilter = '';
 var _todos = [];
 var _detailCache = {};
 var _collateralCache = {};
+var _archivedCollateralByName = {};
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
@@ -75,6 +77,50 @@ setupFilterGroup('priority-filter', function (val) {
 });
 
 function loadTodos() {
+  if (searchEl) searchEl.value = '';
+
+  if (_statusFilter === 'archived') {
+    var aq = db.from('brainy_archive_entries')
+      .select('id, todo_name, completion_date, year_month, summary_text, todo_snapshot, collateral_snapshot')
+      .order('completion_date', { ascending: false })
+      .limit(50);
+    aq.then(function (result) {
+      if (result.error) {
+        showStatus('Failed to load: ' + result.error.message, 'status-error');
+        return;
+      }
+      var rows = result.data || [];
+      _todos = rows.map(function (r) {
+        var snap = r.todo_snapshot || {};
+        var summary = r.summary_text || '';
+        return {
+          id: r.id,
+          name: r.todo_name,
+          status: 'archived',
+          priority: snap.priority || null,
+          summary: summary.split(/\n\n/)[0],
+          notes: summary,
+          category: snap.category || null,
+          due: r.completion_date,
+          created_at: r.completion_date,
+          _archived: true,
+          _collateralSnapshot: r.collateral_snapshot || null,
+        };
+      });
+      if (_priorityFilter) {
+        _todos = _todos.filter(function (t) { return t.priority === _priorityFilter; });
+      }
+      _detailCache = {};
+      _collateralCache = {};
+      _archivedCollateralByName = {};
+      for (var i = 0; i < _todos.length; i++) {
+        _archivedCollateralByName[_todos[i].name] = _todos[i]._collateralSnapshot;
+      }
+      renderTodos(_todos);
+    });
+    return;
+  }
+
   var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, created_at').order('created_at', { ascending: false }).limit(50);
   if (_statusFilter) query = query.eq('status', _statusFilter);
   if (_priorityFilter) query = query.eq('priority', _priorityFilter);
@@ -89,6 +135,10 @@ function loadTodos() {
     _collateralCache = {};
     renderTodos(_todos);
   });
+}
+
+if (searchEl) {
+  setupLiveSearch(searchEl, function () { return _todos; }, ['name', 'summary', 'category'], renderTodos);
 }
 
 function renderTodos(todos) {
@@ -144,7 +194,7 @@ cardsEl.addEventListener('click', function (e) {
   card.appendChild(detail);
 
   // Fetch full todo details + collateral
-  loadDetail(todo.id, detail);
+  loadDetail(todo, detail);
 });
 
 // Collateral box expand/collapse via event delegation
@@ -165,7 +215,15 @@ cardsEl.addEventListener('click', function (e) {
   box.className = isOpen ? box.className.replace(' collateral-open', '') : box.className + ' collateral-open';
 });
 
-function loadDetail(todoId, detailEl) {
+function loadDetail(todo, detailEl) {
+  var todoId = todo.id;
+
+  if (todo._archived) {
+    renderDetail({ notes: todo.notes }, detailEl);
+    renderCollateral(normalizeArchivedCollateral(_archivedCollateralByName[todo.name]), detailEl);
+    return;
+  }
+
   if (_detailCache[todoId] !== undefined) {
     renderDetail(_detailCache[todoId], detailEl);
     loadCollateral(todoId, detailEl);
@@ -181,6 +239,16 @@ function loadDetail(todoId, detailEl) {
       renderDetail(row, detailEl);
       loadCollateral(todoId, detailEl);
     });
+}
+
+function normalizeArchivedCollateral(snap) {
+  if (!snap || !snap.length) return [];
+  return snap.map(function (entry) {
+    if (typeof entry === 'string') {
+      return { filename: entry, content_type: null, storage_path: null, text_content: null, _legacy: true };
+    }
+    return entry;
+  });
 }
 
 function renderDetail(row, detailEl) {
@@ -235,6 +303,12 @@ function renderCollateral(items, detailEl) {
         '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '">' +
           escapeHtml(item.filename) +
         '</span>' +
+      '</div>';
+    } else if (item._legacy) {
+      // Old-shape archive entry: filename string only, content not preserved
+      html += '<div class="collateral-box collateral-box-link">' +
+        '<span class="collateral-file-link">' + escapeHtml(item.filename) + '</span>' +
+        '<span class="archived-empty-note"> (content not preserved)</span>' +
       '</div>';
     }
   }
