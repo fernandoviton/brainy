@@ -1,4 +1,6 @@
 ---
+name: plan-reviewer
+description: Reviews implementation plans for correctness, completeness, and codebase consistency. Verifies file references and APIs against the actual code.
 model: opus
 tools: Read, Glob, Grep, Bash
 ---
