@@ -69,7 +69,10 @@ function parseArgs(argv) {
   const positional = [];
   let i = 0;
   while (i < argv.length) {
-    if (argv[i].startsWith('--')) {
+    if (argv[i] === '-h') {
+      args.help = true;
+      i += 1;
+    } else if (argv[i].startsWith('--')) {
       const key = argv[i].replace(/^--/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
       if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
         args[key] = argv[i + 1];
@@ -188,9 +191,18 @@ async function main() {
   const storage = getStorage();
   const format = args.format;
 
+  // Help short-circuit: a `--help`/`-h` flag anywhere, an explicit `help`
+  // action, or a missing resource shows the relevant help and exits 0 BEFORE
+  // any storage/network call — so e.g. `todo create --help` never mutates data.
+  const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge'];
+
   try {
     if (!resource || resource === 'help') {
       showHelp('main');
+      return;
+    }
+    if (args.help) {
+      showHelp(KNOWN_RESOURCES.includes(resource) ? resource : 'main');
       return;
     }
 

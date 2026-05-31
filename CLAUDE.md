@@ -33,6 +33,8 @@ node backend/cli.js <command>
 
 Config is in `.env`.
 
+**Latency:** CLI calls hit Supabase over the network and can occasionally be slow (a few seconds). Give them a slightly larger timeout (~5s) and wait for the result before reacting — a delayed response is not a failure, so don't retry or assume the command errored just because output hasn't come back yet.
+
 ### CLI Reference
 
 All three resources (**todo**, **capture**, **knowledge**) support `list` and `get <identifier>`. All commands support `--format json`.
@@ -101,6 +103,14 @@ This batch script converts all unconverted PDFs across unprocessed captures. Run
 
 ## Environment
 
+- **Use the PowerShell tool, NOT the Bash tool.** The Bash tool runs real bash even on this Windows machine, so PowerShell syntax (`@'...'@` here-strings, `[Console]::OutputEncoding`, `$env:`) silently fails there. Anything that pipes text into a CLI command — especially `--stdin` for `todo update --field notes` or `knowledge upsert` — must go through the PowerShell tool.
+- **Piping multi-line text to `--stdin`:** use a single-quoted here-string and set UTF-8 first so em-dashes/accents survive:
+  ```powershell
+  [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; @'
+  ...content...
+  '@ | node backend/cli.js knowledge upsert <path> --stdin
+  ```
+  In single-quoted here-strings, escape a literal `'` by doubling it (`''`).
 - **Shell is PowerShell**, not bash. Do not use `/dev/stdin`, `/dev/null`, `grep`, `awk`, or other Unix-isms. Use the CLI's built-in flags for filtering/formatting.
 
 For Brainy codebase development, see `DEVELOPMENT.md`.

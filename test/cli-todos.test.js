@@ -299,3 +299,29 @@ describe('todo collateral get', () => {
     expect(errors[0]).toContain('Usage');
   });
 });
+
+// ---------------------------------------------------------------------------
+// --help / -h short-circuits to resource help WITHOUT touching storage
+// ---------------------------------------------------------------------------
+describe('--help on a subaction shows help and does not touch storage', () => {
+  test('todo create --help prints todo help and never calls createTodo', async () => {
+    const { output, exitCode } = await runCLI(['todo', 'create', '--help']);
+    expect(exitCode).toBe(0);
+    expect(mockStorage.createTodo).not.toHaveBeenCalled();
+    expect(output.join('\n')).toContain('node backend/cli.js todo <action>');
+  });
+
+  test('todo create -h prints todo help and never calls createTodo', async () => {
+    const { output, exitCode } = await runCLI(['todo', 'create', '-h']);
+    expect(exitCode).toBe(0);
+    expect(mockStorage.createTodo).not.toHaveBeenCalled();
+    expect(output.join('\n')).toContain('node backend/cli.js todo <action>');
+  });
+
+  test('knowledge upsert --help prints knowledge help and never calls upsertKnowledge', async () => {
+    const { output, exitCode } = await runCLI(['knowledge', 'upsert', 'foo/bar.md', '--help']);
+    expect(exitCode).toBe(0);
+    expect(mockStorage.upsertKnowledge).not.toHaveBeenCalled();
+    expect(output.join('\n')).toContain('node backend/cli.js knowledge <action>');
+  });
+});
