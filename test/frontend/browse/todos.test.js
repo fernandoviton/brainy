@@ -361,6 +361,47 @@ describe('todo cards - expand/collapse', () => {
   });
 });
 
+// ── Scheduled date display ──────────────────────────────────────
+
+describe('browse todos - scheduled date', () => {
+  const scheduledTodos = [
+    {
+      id: 'uuid-s', name: 'vacuum-filter', status: 'scheduled', priority: 'P2',
+      summary: 'Vacuum the prefilter', notes: null, category: 'home',
+      due: null, scheduled_date: '2026-08-31', created_at: '2026-05-31T10:00:00Z',
+    },
+  ];
+
+  test('initial load selects scheduled_date column', async () => {
+    const env = loadApp(scheduledTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(env.mockQuery.select).toHaveBeenCalledWith(
+      expect.stringContaining('scheduled_date')
+    );
+  });
+
+  test('scheduled todo renders its scheduled_date', async () => {
+    const env = loadApp(scheduledTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('Scheduled ');
+    expect(html).toContain('2026-08-31');
+  });
+
+  test('todo without scheduled_date shows no Scheduled label', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).not.toContain('Scheduled ');
+  });
+});
+
 // ── Step 2: Markdown rendering ──────────────────────────────────
 
 describe('todo cards - markdown rendering', () => {

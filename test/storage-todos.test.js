@@ -87,3 +87,99 @@ describe('archiveTodo - collateral snapshot', () => {
     ]);
   });
 });
+
+// A todo carries a scheduled_date iff its status is 'scheduled'; `due` is always optional.
+describe('createTodo - schedule invariant', () => {
+  test('rejects status=scheduled without a scheduled_date', async () => {
+    await expect(storage.createTodo({ name: 'a', status: 'scheduled' }))
+      .rejects.toThrow(/scheduled_date/);
+  });
+
+  test('rejects a scheduled_date when status is not scheduled', async () => {
+    await expect(storage.createTodo({ name: 'a', status: 'active', scheduled_date: '2026-08-31' }))
+      .rejects.toThrow(/scheduled/);
+  });
+
+  test('rejects a scheduled_date when status defaults to inbox', async () => {
+    await expect(storage.createTodo({ name: 'a', scheduled_date: '2026-08-31' }))
+      .rejects.toThrow(/scheduled/);
+  });
+
+  test('allows status=scheduled with a scheduled_date', async () => {
+    const res = await storage.createTodo({ name: 'a', status: 'scheduled', scheduled_date: '2026-08-31' });
+    expect(res.status).toBe('scheduled');
+  });
+});
+
+describe('updateTodo - schedule invariant', () => {
+  test('rejects moving to scheduled with no scheduled_date provided or existing', async () => {
+    mockSupabase.setMockSingle({ status: 'active', scheduled_date: null });
+    await expect(storage.updateTodo('t', { status: 'scheduled' }))
+      .rejects.toThrow(/scheduled_date/);
+  });
+
+  test('rejects setting a scheduled_date on a todo that stays non-scheduled', async () => {
+    mockSupabase.setMockSingle({ status: 'active', scheduled_date: null });
+    await expect(storage.updateTodo('t', { scheduled_date: '2026-08-31' }))
+      .rejects.toThrow(/scheduled/);
+  });
+
+  test('allows moving to scheduled when a scheduled_date is provided', async () => {
+    mockSupabase.setMockSingle({ name: 't', status: 'scheduled', scheduled_date: '2026-08-31' });
+    const res = await storage.updateTodo('t', { status: 'scheduled', scheduled_date: '2026-08-31' });
+    expect(res.status).toBe('scheduled');
+  });
+
+  test('clears the scheduled_date when moving off scheduled', async () => {
+    const payloads = [];
+    let call = 0;
+    mockSupabase.supabase.from.mockImplementation(() => {
+      call++;
+      if (call === 1) {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          single: jest.fn(() => Promise.resolve({ data: { status: 'scheduled', scheduled_date: '2026-08-31' }, error: null })),
+        };
+      }
+      const c = {
+        update: jest.fn((p) => { payloads.push(p); return c; }),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn(() => Promise.resolve({ data: { name: 't', status: 'active' }, error: null })),
+      };
+      return c;
+    });
+
+    await storage.updateTodo('t', { status: 'active' });
+    expect(payloads[0]).toHaveProperty('scheduled_date', null);
+  });
+
+  test('skips validation when neither status nor scheduled_date changes', async () => {
+    mockSupabase.setMockSingle({ name: 't', status: 'scheduled' });
+    const res = await storage.updateTodo('t', { priority: 'P1' });
+    expect(res.name).toBe('t');
+  });
+});
+
+describe('promoteScheduled - clears scheduled_date', () => {
+  test('promotes due todos to active and nulls their scheduled_date', async () => {
+    const payloads = [];
+    let call = 0;
+    mockSupabase.supabase.from.mockImplementation(() => {
+      call++;
+      if (call === 1) {
+        const c = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(), lte: jest.fn().mockReturnThis() };
+        c.then = (resolve) => resolve({ data: [{ id: '1', name: 'x' }], error: null });
+        return c;
+      }
+      const c = { update: jest.fn((p) => { payloads.push(p); return c; }), in: jest.fn().mockReturnThis() };
+      c.then = (resolve) => resolve({ data: null, error: null });
+      return c;
+    });
+
+    const names = await storage.promoteScheduled();
+    expect(names).toEqual(['x']);
+    expect(payloads[0]).toHaveProperty('scheduled_date', null);
+  });
+});

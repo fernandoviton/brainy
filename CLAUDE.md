@@ -70,6 +70,8 @@ Run `node backend/cli.js <resource> --help` for anything not listed above.
 - `later` — Parked for later
 - `scheduled` — Future-dated, auto-promoted to active when `scheduled_date <= today`
 
+**Invariant:** a TODO has a `scheduled_date` **if and only if** its status is `scheduled`. `createTodo`/`updateTodo` enforce this (reject `scheduled` with no date, reject a date on any other status); moving off `scheduled` and `promote-scheduled` both clear it. `due` is independent and always optional. When a scheduled date arrives, run `promote-scheduled` rather than hand-editing status.
+
 ### TODO Priorities
 `P0` (urgent) | `P1` (high) | `P2` (medium) | `P3` (low)
 

@@ -121,7 +121,7 @@ function loadTodos() {
     return;
   }
 
-  var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, created_at').order('created_at', { ascending: false }).limit(50);
+  var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, scheduled_date, created_at').order('created_at', { ascending: false }).limit(50);
   if (_statusFilter) query = query.eq('status', _statusFilter);
   if (_priorityFilter) query = query.eq('priority', _priorityFilter);
 
@@ -161,6 +161,7 @@ function renderTodos(todos) {
       '<div class="card-meta">' +
         (t.category ? '<span>' + escapeHtml(t.category) + '</span>' : '') +
         (t.due ? '<span>Due ' + escapeHtml(t.due) + '</span>' : '') +
+        (t.scheduled_date ? '<span>Scheduled ' + escapeHtml(t.scheduled_date) + '</span>' : '') +
         '<span>' + escapeHtml(formatDate(t.created_at)) + '</span>' +
       '</div>' +
     '</div>';

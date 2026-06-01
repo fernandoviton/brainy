@@ -84,9 +84,21 @@ async function getTodo(name) {
   };
 }
 
+// A todo carries a scheduled_date if and only if its status is 'scheduled'.
+// `due` is independent and always optional.
+function assertScheduleInvariant(status, scheduled_date) {
+  if (status === 'scheduled' && !scheduled_date) {
+    throw new Error("status 'scheduled' requires a scheduled_date");
+  }
+  if (scheduled_date && status !== 'scheduled') {
+    throw new Error("scheduled_date can only be set when status is 'scheduled'");
+  }
+}
+
 async function createTodo({ name, summary, status, priority, category, due, scheduled_date, blocked_by }) {
   const userId = await getUserId();
   status = status || 'inbox';
+  assertScheduleInvariant(status, scheduled_date || null);
 
   const row = {
     user_id: userId,
@@ -119,6 +131,27 @@ async function updateTodo(name, changes) {
   if (changes.scheduled_date !== undefined) updates.scheduled_date = changes.scheduled_date;
   if (changes.blocked_by !== undefined) updates.blocked_by = changes.blocked_by ? [].concat(changes.blocked_by) : [];
   if (changes.notes !== undefined) updates.notes = changes.notes;
+
+  // Enforce the scheduled_date invariant against the resulting state. Only read
+  // the existing row when status or scheduled_date is actually changing.
+  if (changes.status !== undefined || changes.scheduled_date !== undefined) {
+    const { data: existing, error: readErr } = await supabase
+      .from('brainy_todos')
+      .select('status, scheduled_date')
+      .eq('user_id', userId)
+      .eq('name', name)
+      .single();
+    if (readErr) throw readErr;
+    const cur = existing || {};
+    const finalStatus = changes.status || cur.status;
+    let finalScheduled = changes.scheduled_date !== undefined ? changes.scheduled_date : cur.scheduled_date;
+    // Moving off 'scheduled' without mentioning the date clears the stale value.
+    if (finalStatus !== 'scheduled' && changes.scheduled_date === undefined && cur.scheduled_date) {
+      finalScheduled = null;
+      updates.scheduled_date = null;
+    }
+    assertScheduleInvariant(finalStatus, finalScheduled || null);
+  }
 
   const { data, error } = await supabase
     .from('brainy_todos')
@@ -354,7 +387,7 @@ async function promoteScheduled() {
   const ids = scheduled.map((t) => t.id);
   const { error: updateErr } = await supabase
     .from('brainy_todos')
-    .update({ status: 'active' })
+    .update({ status: 'active', scheduled_date: null })
     .in('id', ids);
 
   if (updateErr) throw updateErr;
