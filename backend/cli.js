@@ -3,6 +3,7 @@
  * Brainy CLI — unified interface for both file and Supabase backends.
  * Run with "help" or "<resource> help" for usage details.
  */
+const fs = require('fs');
 const { getStorage } = require('./storage');
 const captureService = require('./capture-service');
 
@@ -31,7 +32,8 @@ Actions:
            [--priority <p>] [--category <c>]
            [--due <d>] [--scheduled-date <d>]
            [--blocked-by <name>]
-           [--field notes --stdin]                  Pipe notes content via stdin
+           [--field notes --file <path>]            Set notes from a UTF-8 file (preferred; encoding-safe)
+           [--field notes --stdin]                  Pipe notes via stdin (guarded against '?' corruption)
   delete <name>                                    Delete a TODO
   archive <name> [--summary-text <t>]              Archive a completed TODO
            [--completion-date <d>]
@@ -56,7 +58,8 @@ Actions:
 Actions:
   list [--prefix <path>]       List knowledge entries, optionally filtered by path prefix
   get <path>                   Get knowledge content
-  upsert <path> --stdin        Create or update knowledge (content via stdin)
+  upsert <path> --file <path>  Create or update knowledge from a UTF-8 file (preferred; encoding-safe)
+  upsert <path> --stdin        Create or update knowledge via stdin (guarded against '?' corruption)
            [--topic <t>] [--summary <s>]`,
 };
 
@@ -130,6 +133,45 @@ function readStdin() {
       }
     });
   });
+}
+
+// Signature of PowerShell's lossy console down-conversion: when [Console]::
+// OutputEncoding is not UTF-8, non-ASCII chars (en-dash 23–25, em-dash, bullets
+// ••••) are flattened to literal '?' (0x3F) BEFORE they reach the CLI, so the
+// data is already destroyed — no decoder can recover it. We can only detect the
+// telltale pattern and refuse to persist it. Matches digit?digit ranges, runs of
+// '?', and space-?-space (flattened dashes); deliberately ignores a lone trailing
+// '?' and URL query strings (a?b / p?q) to avoid false positives on real prose.
+const ENCODING_CORRUPTION_RE = /\?{2,}|\d\s?\?\s?\d|\s\?\s/;
+
+function detectEncodingCorruption(text) {
+  return typeof text === 'string' && ENCODING_CORRUPTION_RE.test(text);
+}
+
+function stripBom(s) {
+  return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+}
+
+// Resolve text content for --stdin / --file inputs. --file is the encoding-safe
+// path (fs read never touches the Windows console code page), so it is trusted as
+// authored. --stdin is guarded: corrupted content is rejected, steering the
+// author to re-write to a UTF-8 file and pass --file instead.
+async function readContentInput(args, label) {
+  if (args.file) {
+    return stripBom(fs.readFileSync(args.file, 'utf8'));
+  }
+  const content = await readStdin();
+  if (detectEncodingCorruption(content)) {
+    console.error(
+      `[cli] Refusing to write ${label}: the piped content contains '?' runs that look like ` +
+      `encoding corruption (e.g. an en-dash/bullet flattened to '?' by PowerShell's console ` +
+      `encoder). The original characters are already lost in the pipe and cannot be recovered.\n` +
+      `Fix: write the content to a UTF-8 file (e.g. under tmp/) and pass --file <path> instead of --stdin. ` +
+      `If the '?' are genuinely intended, --file bypasses this check.`,
+    );
+    process.exit(1);
+  }
+  return content;
 }
 
 function output(data, format) {
@@ -241,8 +283,8 @@ async function main() {
         if (args.due !== undefined) changes.due = args.due || null;
         if (args.scheduledDate !== undefined) changes.scheduled_date = args.scheduledDate || null;
         if (args.blockedBy !== undefined) changes.blocked_by = args.blockedBy || null;
-        if (args.field === 'notes' && args.stdin) {
-          changes.notes = await readStdin();
+        if (args.field === 'notes' && (args.stdin || args.file)) {
+          changes.notes = await readContentInput(args, 'notes');
         }
         const result = await storage.updateTodo(name, changes);
         console.log(`Updated: ${result.name} [${result.status}]`);
@@ -355,7 +397,7 @@ async function main() {
       } else if (action === 'upsert') {
         const upsertPath = rest[0] || args.path;
         if (!upsertPath) { console.error('Usage: knowledge upsert <path> --stdin'); process.exit(1); }
-        const content = args.stdin ? await readStdin() : '';
+        const content = (args.stdin || args.file) ? await readContentInput(args, 'knowledge content') : '';
         const result = await storage.upsertKnowledge({
           path: upsertPath,
           content,
@@ -397,7 +439,7 @@ async function main() {
   }
 }
 
-module.exports = { main };
+module.exports = { main, detectEncodingCorruption };
 if (require.main === module) {
   main();
 }

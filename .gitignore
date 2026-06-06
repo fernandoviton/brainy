@@ -21,6 +21,9 @@ nul
 # Node
 node_modules/
 
+# Scratch dir for content authored for `--file` (notes/knowledge upserts)
+tmp/
+
 # Python venv
 tools/.venv/
 

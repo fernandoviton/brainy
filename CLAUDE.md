@@ -105,14 +105,15 @@ This batch script converts all unconverted PDFs across unprocessed captures. Run
 
 ## Environment
 
-- **Use the PowerShell tool, NOT the Bash tool.** The Bash tool runs real bash even on this Windows machine, so PowerShell syntax (`@'...'@` here-strings, `[Console]::OutputEncoding`, `$env:`) silently fails there. Anything that pipes text into a CLI command — especially `--stdin` for `todo update --field notes` or `knowledge upsert` — must go through the PowerShell tool.
-- **Piping multi-line text to `--stdin`:** use a single-quoted here-string and set UTF-8 first so em-dashes/accents survive:
+- **Use the PowerShell tool, NOT the Bash tool.** The Bash tool runs real bash even on this Windows machine, so PowerShell syntax (`@'...'@` here-strings, `$env:`) silently fails there.
+- **Setting notes / knowledge content → use `--file`, not `--stdin`.** Piping text into the CLI routes it through PowerShell's console encoder, which silently flattens em-dashes, en-dashes, and bullets (`–`, `—`, `•`) to literal `?` **before** the CLI sees them — corruption that cannot be recovered. Instead, author the content with the **Write tool** to a file under `tmp/` (gitignored) as UTF-8, then point the CLI at it:
   ```powershell
-  [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; @'
-  ...content...
-  '@ | node backend/cli.js knowledge upsert <path> --stdin
+  # 1. Write tool → tmp/notes.md  (UTF-8, no console transcoding)
+  # 2. then:
+  node backend/cli.js todo update <name> --field notes --file tmp/notes.md
+  node backend/cli.js knowledge upsert <path> --file tmp/content.md
   ```
-  In single-quoted here-strings, escape a literal `'` by doubling it (`''`).
+  The `--stdin` path still exists but is **guarded**: it rejects content that looks corrupted (e.g. `23?25`, `????1009`) and tells you to switch to `--file`. Don't fight the guard by stripping the characters — use `--file`. Clean up `tmp/` files when done.
 - **Shell is PowerShell**, not bash. Do not use `/dev/stdin`, `/dev/null`, `grep`, `awk`, or other Unix-isms. Use the CLI's built-in flags for filtering/formatting.
 
 For Brainy codebase development, see `DEVELOPMENT.md`.
