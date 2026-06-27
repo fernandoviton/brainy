@@ -175,6 +175,52 @@ describe('browse captures - badge rendering', () => {
   });
 });
 
+describe('browse captures - expand long text', () => {
+  const longText = 'x'.repeat(500);
+  const shortText = 'short note';
+
+  test('long capture renders full (untruncated) text plus an expand toggle', async () => {
+    const fixtures = [
+      { id: '1', text: longText, processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = dom.elements['cards'].innerHTML;
+    // Full text is present (not cut to 300 chars + ellipsis)
+    expect(html).toContain(longText);
+    expect(html).not.toContain('…');
+    // Collapsible affordance present
+    expect(html).toContain('expand-toggle');
+    expect(html).toContain('card-text collapsed');
+  });
+
+  test('short capture has no expand toggle and is not collapsed', async () => {
+    const fixtures = [
+      { id: '1', text: shortText, processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = dom.elements['cards'].innerHTML;
+    expect(html).toContain(shortText);
+    expect(html).not.toContain('expand-toggle');
+    expect(html).not.toContain('collapsed');
+  });
+});
+
 describe('browse captures - live search', () => {
   test('typing in #text-search filters cards client-side without re-querying', async () => {
     const fixtures = [

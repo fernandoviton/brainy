@@ -11,6 +11,9 @@ var searchEl = document.getElementById('text-search');
 var _processedFilter = 'unprocessed';
 var _captures = [];
 
+// Captures longer than this (chars) render collapsed with a Show more toggle.
+var COLLAPSE_THRESHOLD = 300;
+
 function showStatus(message, className) {
   statusMsg.textContent = message;
   statusMsg.className = className;
@@ -52,6 +55,24 @@ processedGroup.addEventListener('click', function (e) {
   e.target.classList.add('active');
   _processedFilter = e.target.getAttribute('data-value');
   loadCaptures();
+});
+
+// Expand/collapse long capture text (event delegation on the cards container).
+cardsEl.addEventListener('click', function (e) {
+  var btn = e.target;
+  if (!btn.classList || !btn.classList.contains('expand-toggle')) return;
+  var textEl = btn.previousElementSibling;
+  if (!textEl) return;
+  var expanded = btn.getAttribute('data-expanded') === 'true';
+  if (expanded) {
+    textEl.classList.add('collapsed');
+    btn.setAttribute('data-expanded', 'false');
+    btn.textContent = 'Show more';
+  } else {
+    textEl.classList.remove('collapsed');
+    btn.setAttribute('data-expanded', 'true');
+    btn.textContent = 'Show less';
+  }
 });
 
 function loadCaptures() {
@@ -98,8 +119,16 @@ function renderCaptures(captures) {
     var processedClass = c.processed_at ? 'badge-processed' : 'badge-unprocessed';
     var processedLabel = c.processed_at ? 'Processed' : 'Unprocessed';
 
+    var textHtml = '';
+    if (c.text) {
+      var isLong = c.text.length > COLLAPSE_THRESHOLD;
+      var textClass = isLong ? 'card-text collapsed' : 'card-text';
+      textHtml = '<div class="' + textClass + '">' + escapeHtml(c.text) + '</div>' +
+        (isLong ? '<button type="button" class="expand-toggle" data-expanded="false">Show more</button>' : '');
+    }
+
     html += '<div class="card">' +
-      (c.text ? '<div class="card-text">' + escapeHtml(truncate(c.text, 300)) + '</div>' : '') +
+      textHtml +
       (media.length > 0 ? '<div class="card-media" data-capture="' + i + '">' + renderMediaPlaceholders(media) + '</div>' : '') +
       '<div class="card-meta">' +
         '<span class="' + processedClass + '">' + processedLabel + '</span>' +
