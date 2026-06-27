@@ -84,6 +84,34 @@ main {
   line-height: 1.55;
   margin-bottom: 0.4rem;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.card-text.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.expand-toggle {
+  display: inline-block;
+  width: auto;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--terracotta);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.expand-toggle:hover {
+  text-decoration: underline;
+  background: none;
+  transform: none;
 }
 
 .card-media {
