@@ -11,6 +11,7 @@ var searchEl = document.getElementById('text-search');
 var _statusFilter = 'active';
 var _priorityFilter = '';
 var _todos = [];
+var _rendered = [];
 var _detailCache = {};
 var _collateralCache = {};
 var _archivedCollateralByName = {};
@@ -142,6 +143,11 @@ if (searchEl) {
 }
 
 function renderTodos(todos) {
+  // Track exactly what was rendered so expand-clicks resolve the right todo.
+  // During live search this is a filtered subset, so card indexes (data-todo-idx)
+  // are positions in THIS array, not in the full _todos list.
+  _rendered = todos || [];
+
   if (!todos || todos.length === 0) {
     cardsEl.innerHTML = '<div class="empty-state">No TODOs found.</div>';
     return;
@@ -178,7 +184,7 @@ cardsEl.addEventListener('click', function (e) {
   if (!card) return;
 
   var idx = parseInt(card.getAttribute('data-todo-idx'), 10);
-  var todo = _todos[idx];
+  var todo = _rendered[idx];
   if (!todo) return;
 
   var expanded = card.classList.toggle('card-expanded');

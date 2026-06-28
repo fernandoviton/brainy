@@ -642,6 +642,29 @@ describe('browse todos - archived pill', () => {
 // ── Step 6: Live search ─────────────────────────────────────────
 
 describe('browse todos - live search', () => {
+  test('expanding a card after filtering loads the correct todo, not the one at the same index in the full list', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    // Filter so only the SECOND todo (write-docs, uuid-2) remains visible.
+    // It now renders at filtered index 0.
+    const searchEl = env.dom.elements['text-search'];
+    searchEl.value = 'docs';
+    env.dom.listeners['text-search:input'][0]();
+    await flushPromises();
+
+    // Expand the only visible card (index 0).
+    const clickHandlers = env.dom.listeners['cards:click'];
+    const card = makeMockCard(0);
+    clickHandlers[0]({ target: makeMockToggle(card) });
+    await flushPromises();
+
+    // It must load write-docs's collateral (uuid-2), NOT fix-bug's (uuid-1).
+    expect(env.collateralQuery.eq).toHaveBeenCalledWith('todo_id', 'uuid-2');
+    expect(env.collateralQuery.eq).not.toHaveBeenCalledWith('todo_id', 'uuid-1');
+  });
+
   test('typing in #text-search filters loaded cards without re-querying', async () => {
     const env = loadApp(sampleTodos);
     env.authCallback('SIGNED_IN', { user: { id: '123' } });
