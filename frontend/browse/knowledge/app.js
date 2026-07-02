@@ -142,7 +142,8 @@ function renderKnowledge(items) {
     html += '<h2 class="section-heading">' + escapeHtml(label) + '</h2>';
     for (var i = 0; i < group.items.length; i++) {
       var k = group.items[i];
-      html += '<div class="card" data-knowledge-path="' + escapeHtml(k.path) + '">' +
+      // id matches the URL fragment (#knowledge=<path>) so cards are native anchor targets
+      html += '<div class="card" id="knowledge=' + escapeHtml(k.path) + '" data-knowledge-path="' + escapeHtml(k.path) + '">' +
         '<div class="card-header">' +
           '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
           '<span class="card-path">' + renderPathBreadcrumb(k.path) + '</span>' +

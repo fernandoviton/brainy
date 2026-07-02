@@ -194,7 +194,8 @@ function renderTodos(todos) {
   var html = '';
   for (var i = 0; i < todos.length; i++) {
     var t = todos[i];
-    html += '<div class="card" data-todo-idx="' + i + '">' +
+    // id matches the URL fragment (#todo=<name>) so cards are native anchor targets
+    html += '<div class="card" id="todo=' + escapeHtml(t.name) + '" data-todo-idx="' + i + '">' +
       '<div class="card-header">' +
         '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
         '<span class="card-name">' + escapeHtml(t.name) + '</span>' +

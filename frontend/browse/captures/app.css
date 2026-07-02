@@ -192,3 +192,9 @@ main {
   border: 1px solid #C4652A;
   box-shadow: 0 0 0 3px rgba(196, 101, 42, 0.15);
 }
+
+/* Highlight the card the URL fragment points at (native anchor target) */
+.card:target {
+  border: 1px solid #C4652A;
+  box-shadow: 0 0 0 3px rgba(196, 101, 42, 0.15);
+}

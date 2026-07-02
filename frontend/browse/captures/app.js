@@ -170,7 +170,8 @@ function renderCaptures(captures) {
           : '');
     }
 
-    html += '<div class="card' + (isTarget ? ' card-highlight' : '') + '" data-capture-id="' + escapeHtml(String(c.id)) + '">' +
+    // id matches the URL fragment (#capture=<id>) so cards are native anchor targets
+    html += '<div class="card' + (isTarget ? ' card-highlight' : '') + '" id="capture=' + escapeHtml(String(c.id)) + '" data-capture-id="' + escapeHtml(String(c.id)) + '">' +
       textHtml +
       (media.length > 0 ? '<div class="card-media" data-capture="' + i + '">' + renderMediaPlaceholders(media) + '</div>' : '') +
       '<div class="card-meta">' +

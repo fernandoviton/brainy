@@ -273,6 +273,22 @@ describe('browse captures - deep linking', () => {
     expect(dom.elements['cards'].innerHTML).toContain('data-capture-id="cap-1"');
   });
 
+  test('cards render with an anchor id matching the deep link hash', async () => {
+    const fixtures = [
+      { id: 'cap-1', text: 'note', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(dom.elements['cards'].innerHTML).toContain('id="capture=cap-1"');
+  });
+
   test('deep-linked capture renders highlighted with long text expanded, and scrolls to it', async () => {
     const fixtures = [
       { id: 'cap-2', text: longText, processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },

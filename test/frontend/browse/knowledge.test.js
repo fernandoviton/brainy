@@ -186,6 +186,15 @@ describe('browse knowledge - deep linking', () => {
     };
   }
 
+  test('cards render with an anchor id matching the deep link hash', async () => {
+    const env = loadApp(sampleRows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    // The mock escapeHtml strips text, so assert the anchor id prefix is present
+    expect(env.dom.elements['cards'].innerHTML).toContain('id="knowledge=');
+  });
+
   test('hash #knowledge=<path> expands the matching card on load and scrolls to it', async () => {
     const env = loadApp(sampleRows, { hash: '#knowledge=tools/git/rebase.md' });
     const card = makeCard();

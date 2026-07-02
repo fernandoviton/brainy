@@ -710,6 +710,16 @@ describe('browse todos - deep linking', () => {
     expect(card.scrollIntoView).toHaveBeenCalled();
   });
 
+  test('cards render with an anchor id matching the deep link hash', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('id="todo=fix-bug"');
+    expect(html).toContain('id="todo=write-docs"');
+  });
+
   test('no hash: no card is auto-expanded on load', async () => {
     const env = loadApp(sampleTodos);
     const querySelector = jest.fn(() => null);
