@@ -9,8 +9,11 @@ CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || '';
 CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
 `;
 
+// Name must not collide with other suites running in parallel jest workers
+// (validate-config.test.js also writes temp configs to os.tmpdir()).
+let seq = 0;
 function writeTempConfig() {
-  const tmp = path.join(os.tmpdir(), `test-config-${Date.now()}.js`);
+  const tmp = path.join(os.tmpdir(), `inject-config-${process.pid}-${Date.now()}-${seq++}.js`);
   fs.writeFileSync(tmp, template);
   return tmp;
 }
