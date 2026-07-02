@@ -7,22 +7,11 @@ const utilsCode = fs.readFileSync(
   'utf8'
 );
 
-function makeSessionStorage(init) {
-  const store = Object.assign({}, init);
-  return {
-    _store: store,
-    getItem: jest.fn((k) => (k in store ? store[k] : null)),
-    setItem: jest.fn((k, v) => { store[k] = String(v); }),
-    removeItem: jest.fn((k) => { delete store[k]; }),
-  };
-}
-
 function loadUtils(windowOverrides) {
   const ctx = {
     window: {
       location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: '' },
       history: { replaceState: jest.fn() },
-      sessionStorage: makeSessionStorage(),
       ...windowOverrides,
     },
   };
@@ -97,43 +86,5 @@ describe('setDeepLink', () => {
     const ctx = loadUtils({ history: undefined, location: { pathname: '/browse/todos/', hash: '' } });
     ctx.setDeepLink('todo', 'fix-bug');
     expect(ctx.window.location.hash).toBe('#todo=fix-bug');
-  });
-});
-
-// The OAuth sign-in redirect drops the URL hash, so the deep link is stashed
-// in sessionStorage before redirecting and recovered afterwards.
-describe('deep link stash (OAuth round-trip)', () => {
-  test('stashDeepLink stores the current hash in sessionStorage', () => {
-    const ctx = loadUtils({ location: { hash: '#todo=fix-bug' } });
-    ctx.stashDeepLink();
-    expect(ctx.window.sessionStorage.setItem).toHaveBeenCalledWith('brainy-deep-link', '#todo=fix-bug');
-  });
-
-  test('stashDeepLink does nothing when there is no hash', () => {
-    const ctx = loadUtils({ location: { hash: '' } });
-    ctx.stashDeepLink();
-    expect(ctx.window.sessionStorage.setItem).not.toHaveBeenCalled();
-  });
-
-  test('getStashedDeepLink returns the stashed value for the key and clears the stash', () => {
-    const ctx = loadUtils({ sessionStorage: makeSessionStorage({ 'brainy-deep-link': '#todo=fix-bug' }) });
-    expect(ctx.getStashedDeepLink('todo')).toBe('fix-bug');
-    expect(ctx.window.sessionStorage.removeItem).toHaveBeenCalledWith('brainy-deep-link');
-  });
-
-  test('getStashedDeepLink returns null when nothing is stashed', () => {
-    const ctx = loadUtils();
-    expect(ctx.getStashedDeepLink('todo')).toBeNull();
-  });
-
-  test('getStashedDeepLink returns null for a key mismatch', () => {
-    const ctx = loadUtils({ sessionStorage: makeSessionStorage({ 'brainy-deep-link': '#capture=abc' }) });
-    expect(ctx.getStashedDeepLink('todo')).toBeNull();
-  });
-
-  test('stash helpers tolerate a missing sessionStorage', () => {
-    const ctx = loadUtils({ sessionStorage: undefined, location: { hash: '#todo=fix-bug' } });
-    expect(() => ctx.stashDeepLink()).not.toThrow();
-    expect(ctx.getStashedDeepLink('todo')).toBeNull();
   });
 });

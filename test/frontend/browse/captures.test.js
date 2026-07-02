@@ -87,16 +87,6 @@ function buildMockDOM() {
   };
 }
 
-function makeSessionStorage(init) {
-  const store = Object.assign({}, init);
-  return {
-    _store: store,
-    getItem: jest.fn((k) => (k in store ? store[k] : null)),
-    setItem: jest.fn((k, v) => { store[k] = String(v); }),
-    removeItem: jest.fn((k) => { delete store[k]; }),
-  };
-}
-
 function loadApp(queryOverrides, opts) {
   const mockQuery = buildMockQuery();
   Object.assign(mockQuery, queryOverrides);
@@ -124,7 +114,6 @@ function loadApp(queryOverrides, opts) {
     window: {
       location: { origin: 'https://example.com', pathname: '/browse/captures/', hash: (opts && opts.hash) || '' },
       history: { replaceState: jest.fn() },
-      sessionStorage: makeSessionStorage((opts && opts.stash) || {}),
     },
     console: { error: jest.fn() },
   };
@@ -346,34 +335,6 @@ describe('browse captures - deep linking', () => {
     const html = dom.elements['cards'].innerHTML;
     expect(html).toContain('already processed');
     expect(html).toContain('card-highlight');
-  });
-
-  test('clicking sign-in stashes the deep link before the OAuth redirect', async () => {
-    const { ctx, dom, mockAuth } = loadApp({}, { hash: '#capture=cap-2' });
-
-    dom.listeners['login-btn:click']();
-
-    expect(ctx.window.sessionStorage.setItem).toHaveBeenCalledWith('brainy-deep-link', '#capture=cap-2');
-    expect(mockAuth.signInWithOAuth).toHaveBeenCalled();
-  });
-
-  test('stashed deep link is used after the OAuth round-trip strips the hash', async () => {
-    const fixtures = [
-      { id: 'cap-2', text: 'target note', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
-    ];
-    const { authCallback, ctx, dom } = loadApp({
-      then: jest.fn().mockImplementation(function (cb) {
-        cb({ data: fixtures, error: null });
-        return Promise.resolve();
-      }),
-    }, { stash: { 'brainy-deep-link': '#capture=cap-2' } });
-
-    authCallback('SIGNED_IN', { user: { id: '123' } });
-    await flushPromises();
-
-    expect(dom.elements['cards'].innerHTML).toContain('card-highlight');
-    expect(ctx.window.sessionStorage.removeItem).toHaveBeenCalledWith('brainy-deep-link');
-    expect(ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '#capture=cap-2');
   });
 });
 

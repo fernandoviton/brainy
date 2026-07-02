@@ -10,7 +10,7 @@ var searchEl = document.getElementById('text-search');
 
 var _processedFilter = 'unprocessed';
 var _captures = [];
-var _deepLinkCaptureId = getDeepLink('capture') || getStashedDeepLink('capture');
+var _deepLinkCaptureId = getDeepLink('capture');
 
 // Captures longer than this (chars) render collapsed with a Show more toggle.
 var COLLAPSE_THRESHOLD = 300;
@@ -37,7 +37,6 @@ db.auth.onAuthStateChange(function (event, session) {
 });
 
 loginBtn.addEventListener('click', function () {
-  stashDeepLink(); // the OAuth redirect drops the hash
   db.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname },
@@ -129,7 +128,6 @@ function handleDeepLink() {
 }
 
 function scrollToCapture(id) {
-  setDeepLink('capture', id); // restore the shareable URL (lost when the link went through sign-in)
   var card = cardsEl.querySelector('[data-capture-id="' + id + '"]');
   if (card && card.scrollIntoView) card.scrollIntoView();
 }
