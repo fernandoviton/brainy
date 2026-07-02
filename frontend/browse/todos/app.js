@@ -10,7 +10,7 @@ var searchEl = document.getElementById('text-search');
 
 var _statusFilter = 'active';
 var _priorityFilter = '';
-var _deepLinkName = getDeepLink('todo');
+var _deepLinkName = getDeepLink('todo') || getStashedDeepLink('todo');
 var _todos = [];
 var _rendered = [];
 var _detailCache = {};
@@ -46,6 +46,7 @@ db.auth.onAuthStateChange(function (event, session) {
 });
 
 loginBtn.addEventListener('click', function () {
+  stashDeepLink(); // the OAuth redirect drops the hash
   db.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname },
@@ -172,6 +173,7 @@ function openTodoAt(idx) {
   var card = cardsEl.querySelector('[data-todo-idx="' + idx + '"]');
   if (!card) return;
   card.classList.add('card-expanded');
+  setDeepLink('todo', _rendered[idx].name); // restore the shareable URL (lost when the link went through sign-in)
   ensureDetail(card, _rendered[idx]);
   if (card.scrollIntoView) card.scrollIntoView();
 }

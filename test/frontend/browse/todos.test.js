@@ -124,6 +124,16 @@ function buildMockDOM() {
   };
 }
 
+function makeSessionStorage(init) {
+  const store = Object.assign({}, init);
+  return {
+    _store: store,
+    getItem: jest.fn((k) => (k in store ? store[k] : null)),
+    setItem: jest.fn((k, v) => { store[k] = String(v); }),
+    removeItem: jest.fn((k) => { delete store[k]; }),
+  };
+}
+
 /** Build a mock card element for expand/collapse tests */
 function makeMockCard(idx, opts) {
   const expanded = opts && opts.expanded;
@@ -194,6 +204,7 @@ function loadApp(todos, collateralData, opts) {
     window: {
       location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: (opts && opts.hash) || '' },
       history: { replaceState: jest.fn() },
+      sessionStorage: makeSessionStorage((opts && opts.stash) || {}),
       open: jest.fn(),
     },
     console: { error: jest.fn(), log: jest.fn() },
@@ -784,6 +795,33 @@ describe('browse todos - deep linking', () => {
 
     expect(suppQuery.eq).toHaveBeenCalledWith('name', 'write-docs');
     expect(dom.elements['cards'].innerHTML).toContain('write-docs');
+  });
+
+  test('clicking sign-in stashes the deep link before the OAuth redirect', async () => {
+    const env = loadApp(sampleTodos, [], { hash: '#todo=write-docs' });
+
+    env.dom.listeners['login-btn:click'][0]();
+
+    expect(env.ctx.window.sessionStorage.setItem).toHaveBeenCalledWith('brainy-deep-link', '#todo=write-docs');
+    expect(env.mockAuth.signInWithOAuth).toHaveBeenCalled();
+  });
+
+  test('stashed deep link is used after the OAuth round-trip strips the hash', async () => {
+    const env = loadApp(sampleTodos, [], { stash: { 'brainy-deep-link': '#todo=write-docs' } });
+    const card = makeMockCard(1);
+    card.scrollIntoView = jest.fn();
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel === '[data-todo-idx="1"]' ? card : null
+    );
+
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(card.classList._classes.has('card-expanded')).toBe(true);
+    expect(env.collateralQuery.eq).toHaveBeenCalledWith('todo_id', 'uuid-2');
+    // Stash is one-shot and the shareable URL is restored
+    expect(env.ctx.window.sessionStorage.removeItem).toHaveBeenCalledWith('brainy-deep-link');
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '#todo=write-docs');
   });
 });
 

@@ -45,14 +45,44 @@ function setupLiveSearch(inputEl, getItems, fields, onFiltered) {
 // Deep links use the URL hash as "#key=value" (e.g. #todo=fix-bug,
 // #knowledge=tools/git/rebase.md) so they work on static hosting.
 
-// eslint-disable-next-line no-unused-vars
-function getDeepLink(key) {
-  var hash = (window.location && window.location.hash) || '';
+function parseDeepLinkHash(hash, key) {
+  hash = hash || '';
   if (hash.charAt(0) === '#') hash = hash.substring(1);
   var eq = hash.indexOf('=');
   if (eq === -1 || hash.substring(0, eq) !== key) return null;
   try {
     return decodeURIComponent(hash.substring(eq + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+// eslint-disable-next-line no-unused-vars
+function getDeepLink(key) {
+  return parseDeepLinkHash((window.location && window.location.hash) || '', key);
+}
+
+var DEEP_LINK_STASH_KEY = 'brainy-deep-link';
+
+// The OAuth sign-in redirect drops the URL hash, so pages stash the deep link
+// in sessionStorage before redirecting and recover it after the round-trip.
+
+// eslint-disable-next-line no-unused-vars
+function stashDeepLink() {
+  try {
+    var hash = (window.location && window.location.hash) || '';
+    if (hash.length > 1) window.sessionStorage.setItem(DEEP_LINK_STASH_KEY, hash);
+  } catch (e) { /* sessionStorage unavailable */ }
+}
+
+// One-shot: reads and clears the stash.
+// eslint-disable-next-line no-unused-vars
+function getStashedDeepLink(key) {
+  try {
+    var hash = window.sessionStorage.getItem(DEEP_LINK_STASH_KEY);
+    if (!hash) return null;
+    window.sessionStorage.removeItem(DEEP_LINK_STASH_KEY);
+    return parseDeepLinkHash(hash, key);
   } catch (e) {
     return null;
   }

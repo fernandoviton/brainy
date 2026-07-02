@@ -76,6 +76,16 @@ function buildMockDOM() {
   };
 }
 
+function makeSessionStorage(init) {
+  const store = Object.assign({}, init);
+  return {
+    _store: store,
+    getItem: jest.fn((k) => (k in store ? store[k] : null)),
+    setItem: jest.fn((k, v) => { store[k] = String(v); }),
+    removeItem: jest.fn((k) => { delete store[k]; }),
+  };
+}
+
 function loadApp(rows, opts) {
   const mockFrom = jest.fn().mockImplementation(() => buildMockQuery(rows || []));
   let authCallback;
@@ -98,6 +108,7 @@ function loadApp(rows, opts) {
     window: {
       location: { origin: 'https://example.com', pathname: '/browse/knowledge/', hash: (opts && opts.hash) || '' },
       history: { replaceState: jest.fn() },
+      sessionStorage: makeSessionStorage((opts && opts.stash) || {}),
     },
     console: { error: jest.fn() },
     clearTimeout: () => {},
@@ -249,6 +260,29 @@ describe('browse knowledge - deep linking', () => {
     await flushPromises();
 
     expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '/browse/knowledge/');
+  });
+
+  test('clicking sign-in stashes the deep link before the OAuth redirect', async () => {
+    const env = loadApp(sampleRows, { hash: '#knowledge=tools/git/rebase.md' });
+
+    env.dom.listeners['login-btn:click']();
+
+    expect(env.ctx.window.sessionStorage.setItem).toHaveBeenCalledWith('brainy-deep-link', '#knowledge=tools/git/rebase.md');
+  });
+
+  test('stashed deep link is used after the OAuth round-trip strips the hash', async () => {
+    const env = loadApp(sampleRows, { stash: { 'brainy-deep-link': '#knowledge=tools/git/rebase.md' } });
+    const card = makeCard();
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel.indexOf('tools/git/rebase.md') !== -1 ? card : null
+    );
+
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    expect(card.classList.add).toHaveBeenCalledWith('card-expanded');
+    expect(env.ctx.window.sessionStorage.removeItem).toHaveBeenCalledWith('brainy-deep-link');
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '#knowledge=tools/git/rebase.md');
   });
 });
 

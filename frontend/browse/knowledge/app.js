@@ -9,7 +9,7 @@ var statusMsg = document.getElementById('status-msg');
 var searchEl = document.getElementById('text-search');
 
 var KNOWLEDGE_LIMIT = 500;
-var _deepLinkPath = getDeepLink('knowledge');
+var _deepLinkPath = getDeepLink('knowledge') || getStashedDeepLink('knowledge');
 var _items = [];
 var _atLimit = false;
 var _itemsByPath = {};
@@ -45,6 +45,7 @@ db.auth.onAuthStateChange(function (event, session) {
 });
 
 loginBtn.addEventListener('click', function () {
+  stashDeepLink(); // the OAuth redirect drops the hash
   db.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname },
@@ -94,6 +95,7 @@ function handleDeepLink() {
   var card = cardsEl.querySelector('[data-knowledge-path="' + item.path + '"]');
   if (!card) return;
   card.classList.add('card-expanded');
+  setDeepLink('knowledge', item.path); // restore the shareable URL (lost when the link went through sign-in)
   ensureDetail(card, item);
   if (card.scrollIntoView) card.scrollIntoView();
 }
