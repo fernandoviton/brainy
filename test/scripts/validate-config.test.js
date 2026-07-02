@@ -5,8 +5,11 @@ const os = require('os');
 
 const script = path.join(__dirname, '../../scripts/validate-config.js');
 
+// Name must not collide with other suites running in parallel jest workers
+// (inject-config.test.js also writes temp configs to os.tmpdir()).
+let seq = 0;
 function writeTempConfig(content) {
-  const tmp = path.join(os.tmpdir(), `test-config-${Date.now()}.js`);
+  const tmp = path.join(os.tmpdir(), `validate-config-${process.pid}-${Date.now()}-${seq++}.js`);
   fs.writeFileSync(tmp, content);
   return tmp;
 }
