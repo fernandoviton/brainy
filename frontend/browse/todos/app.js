@@ -10,6 +10,7 @@ var searchEl = document.getElementById('text-search');
 
 var _statusFilter = 'active';
 var _priorityFilter = '';
+var _deepLinkName = getDeepLink('todo');
 var _todos = [];
 var _rendered = [];
 var _detailCache = {};
@@ -118,6 +119,7 @@ function loadTodos() {
         _archivedCollateralByName[_todos[i].name] = _todos[i]._collateralSnapshot;
       }
       renderTodos(_todos);
+      handleDeepLink();
     });
     return;
   }
@@ -135,7 +137,43 @@ function loadTodos() {
     _detailCache = {};
     _collateralCache = {};
     renderTodos(_todos);
+    handleDeepLink();
   });
+}
+
+// On first load, open the todo named in the URL hash (#todo=<name>). If it
+// isn't in the current filter's results (e.g. a "later" todo while the
+// default filter is "active"), fetch it by name and show it on top.
+function handleDeepLink() {
+  if (!_deepLinkName) return;
+  var name = _deepLinkName;
+  _deepLinkName = null;
+
+  for (var i = 0; i < _rendered.length; i++) {
+    if (_rendered[i].name === name) {
+      openTodoAt(i);
+      return;
+    }
+  }
+
+  db.from('brainy_todos')
+    .select('id, name, status, priority, summary, category, due, scheduled_date, created_at')
+    .eq('name', name)
+    .then(function (result) {
+      var rows = (!result.error && result.data) || [];
+      if (!rows.length) return;
+      _todos = [rows[0]].concat(_todos);
+      renderTodos(_todos);
+      openTodoAt(0);
+    });
+}
+
+function openTodoAt(idx) {
+  var card = cardsEl.querySelector('[data-todo-idx="' + idx + '"]');
+  if (!card) return;
+  card.classList.add('card-expanded');
+  ensureDetail(card, _rendered[idx]);
+  if (card.scrollIntoView) card.scrollIntoView();
 }
 
 if (searchEl) {
@@ -156,7 +194,8 @@ function renderTodos(todos) {
   var html = '';
   for (var i = 0; i < todos.length; i++) {
     var t = todos[i];
-    html += '<div class="card" data-todo-idx="' + i + '">' +
+    // id matches the URL fragment (#todo=<name>) so cards are native anchor targets
+    html += '<div class="card" id="todo=' + escapeHtml(t.name) + '" data-todo-idx="' + i + '">' +
       '<div class="card-header">' +
         '<button class="card-toggle" aria-label="Expand">&#x25B6;</button>' +
         '<span class="card-name">' + escapeHtml(t.name) + '</span>' +
@@ -188,13 +227,17 @@ cardsEl.addEventListener('click', function (e) {
   if (!todo) return;
 
   var expanded = card.classList.toggle('card-expanded');
+  setDeepLink('todo', expanded ? todo.name : null);
   if (!expanded) return; // collapsing — just toggle class, detail div stays hidden via CSS
 
-  // Already has detail div? skip rebuild
+  ensureDetail(card, todo);
+});
+
+// Build the detail div (notes + collateral) unless the card already has one.
+function ensureDetail(card, todo) {
   var detail = card.querySelector('.card-detail');
   if (detail) return;
 
-  // Build detail div
   detail = document.createElement('div');
   detail.className = 'card-detail';
   detail.innerHTML = '<div class="detail-loading">Loading\u2026</div>';
@@ -202,7 +245,7 @@ cardsEl.addEventListener('click', function (e) {
 
   // Fetch full todo details + collateral
   loadDetail(todo, detail);
-});
+}
 
 // Collateral box expand/collapse via event delegation
 cardsEl.addEventListener('click', function (e) {

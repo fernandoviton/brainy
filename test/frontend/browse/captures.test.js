@@ -87,7 +87,7 @@ function buildMockDOM() {
   };
 }
 
-function loadApp(queryOverrides) {
+function loadApp(queryOverrides, opts) {
   const mockQuery = buildMockQuery();
   Object.assign(mockQuery, queryOverrides);
 
@@ -111,7 +111,10 @@ function loadApp(queryOverrides) {
     CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
     supabase: { createClient: mockCreateClient },
     document: dom,
-    window: { location: { origin: 'https://example.com', pathname: '/browse/captures/' } },
+    window: {
+      location: { origin: 'https://example.com', pathname: '/browse/captures/', hash: (opts && opts.hash) || '' },
+      history: { replaceState: jest.fn() },
+    },
     console: { error: jest.fn() },
   };
   vm.createContext(ctx);
@@ -248,6 +251,106 @@ describe('browse captures - live search', () => {
 
     const cardCount = (s) => (s.match(/class="card"/g) || []).length;
     expect(cardCount(dom.elements['cards'].innerHTML)).toBe(1);
+  });
+});
+
+describe('browse captures - deep linking', () => {
+  const longText = 'y'.repeat(500);
+
+  test('cards render with data-capture-id attributes', async () => {
+    const fixtures = [
+      { id: 'cap-1', text: 'note', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(dom.elements['cards'].innerHTML).toContain('data-capture-id="cap-1"');
+  });
+
+  test('cards render with an anchor id matching the deep link hash', async () => {
+    const fixtures = [
+      { id: 'cap-1', text: 'note', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    });
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(dom.elements['cards'].innerHTML).toContain('id="capture=cap-1"');
+  });
+
+  test('deep-linked capture renders highlighted with long text expanded, and scrolls to it', async () => {
+    const fixtures = [
+      { id: 'cap-2', text: longText, processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    }, { hash: '#capture=cap-2' });
+
+    const card = { scrollIntoView: jest.fn() };
+    dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel === '[data-capture-id="cap-2"]' ? card : null
+    );
+
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = dom.elements['cards'].innerHTML;
+    expect(html).toContain('card-highlight');
+    expect(html).not.toContain('card-text collapsed');
+    expect(html).toContain('Show less');
+    expect(card.scrollIntoView).toHaveBeenCalled();
+  });
+
+  test('non-target long captures still render collapsed when a deep link is present', async () => {
+    const fixtures = [
+      { id: 'cap-2', text: 'target', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' },
+      { id: 'cap-3', text: longText, processed_at: null, brainy_capture_media: [], created_at: '2026-04-02T00:00:00Z' },
+    ];
+    const { authCallback, dom } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: fixtures, error: null });
+        return Promise.resolve();
+      }),
+    }, { hash: '#capture=cap-2' });
+
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(dom.elements['cards'].innerHTML).toContain('card-text collapsed');
+  });
+
+  test('deep-linked capture missing from the filtered list is fetched by id and rendered', async () => {
+    const listed = { id: 'cap-1', text: 'unprocessed note', processed_at: null, brainy_capture_media: [], created_at: '2026-04-01T00:00:00Z' };
+    const target = { id: 'cap-9', text: 'already processed', processed_at: '2026-04-02T00:00:00Z', brainy_capture_media: [], created_at: '2026-04-02T00:00:00Z' };
+    let call = 0;
+    const { authCallback, dom, mockQuery } = loadApp({
+      then: jest.fn().mockImplementation(function (cb) {
+        cb({ data: call++ === 0 ? [listed] : [target], error: null });
+        return Promise.resolve();
+      }),
+    }, { hash: '#capture=cap-9' });
+
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(mockQuery.eq).toHaveBeenCalledWith('id', 'cap-9');
+    const html = dom.elements['cards'].innerHTML;
+    expect(html).toContain('already processed');
+    expect(html).toContain('card-highlight');
   });
 });
 

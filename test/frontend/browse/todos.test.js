@@ -191,7 +191,11 @@ function loadApp(todos, collateralData, opts) {
     CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
     supabase: { createClient: mockCreateClient },
     document: dom,
-    window: { location: { origin: 'https://example.com', pathname: '/browse/todos/' }, open: jest.fn() },
+    window: {
+      location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: (opts && opts.hash) || '' },
+      history: { replaceState: jest.fn() },
+      open: jest.fn(),
+    },
     console: { error: jest.fn(), log: jest.fn() },
     parseInt: parseInt,
   };
@@ -684,6 +688,112 @@ describe('browse todos - live search', () => {
     const html = env.dom.elements['cards'].innerHTML;
     expect(html).toContain('fix-bug');
     expect(html).not.toContain('write-docs');
+  });
+});
+
+// ── Step 7: Deep linking ────────────────────────────────────────
+
+describe('browse todos - deep linking', () => {
+  test('hash #todo=<name> expands the matching card on load and scrolls to it', async () => {
+    const env = loadApp(sampleTodos, [], { hash: '#todo=write-docs' });
+    const card = makeMockCard(1);
+    card.scrollIntoView = jest.fn();
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel === '[data-todo-idx="1"]' ? card : null
+    );
+
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(card.classList._classes.has('card-expanded')).toBe(true);
+    expect(env.collateralQuery.eq).toHaveBeenCalledWith('todo_id', 'uuid-2');
+    expect(card.scrollIntoView).toHaveBeenCalled();
+  });
+
+  test('cards render with an anchor id matching the deep link hash', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const html = env.dom.elements['cards'].innerHTML;
+    expect(html).toContain('id="todo=fix-bug"');
+    expect(html).toContain('id="todo=write-docs"');
+  });
+
+  test('no hash: no card is auto-expanded on load', async () => {
+    const env = loadApp(sampleTodos);
+    const querySelector = jest.fn(() => null);
+    env.dom.elements['cards'].querySelector = querySelector;
+
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(querySelector).not.toHaveBeenCalled();
+  });
+
+  test('expanding a card writes #todo=<name> to the URL', async () => {
+    const env = loadApp(sampleTodos);
+    await signInAndExpand(env, 0);
+
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '#todo=fix-bug');
+  });
+
+  test('collapsing a card clears the URL hash', async () => {
+    const env = loadApp(sampleTodos);
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const clickHandlers = env.dom.listeners['cards:click'];
+    const card = makeMockCard(0, { expanded: true, detailEl: makeElement('div') });
+    clickHandlers[0]({ target: makeMockToggle(card) });
+    await flushPromises();
+
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '/browse/todos/');
+  });
+
+  test('deep-linked todo missing from the loaded list is fetched by name and rendered', async () => {
+    // Initial (status=active) load returns only fix-bug; the link targets write-docs.
+    const initialQuery = buildMockQuery([sampleTodos[0]]);
+    const suppQuery = buildMockQuery([sampleTodos[1]]);
+    const collateralQuery = buildMockQuery([]);
+    let todoCalls = 0;
+    const mockFrom = jest.fn((table) => {
+      if (table === 'brainy_todo_collateral') return collateralQuery;
+      return todoCalls++ === 0 ? initialQuery : suppQuery;
+    });
+    let authCallback;
+    const mockAuth = {
+      onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
+      signInWithOAuth: jest.fn(),
+      signOut: jest.fn().mockResolvedValue({}),
+    };
+    const mockCreateClient = jest.fn().mockReturnValue({
+      auth: mockAuth, from: mockFrom,
+      storage: { from: jest.fn().mockReturnValue({ createSignedUrl: jest.fn().mockResolvedValue({ data: null }) }) },
+    });
+    const dom = buildMockDOM();
+    const ctx = {
+      CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
+      supabase: { createClient: mockCreateClient },
+      document: dom,
+      window: {
+        location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: '#todo=write-docs' },
+        history: { replaceState: jest.fn() },
+      },
+      console: { error: jest.fn() },
+      parseInt: parseInt,
+      marked: { parse: jest.fn((t) => '<p>' + t + '</p>') },
+      DOMPurify: { sanitize: jest.fn((h) => h) },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(utilsCode, ctx);
+    vm.runInContext(appCode, ctx);
+
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(suppQuery.eq).toHaveBeenCalledWith('name', 'write-docs');
+    expect(dom.elements['cards'].innerHTML).toContain('write-docs');
   });
 });
 

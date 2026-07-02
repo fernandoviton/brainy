@@ -42,6 +42,33 @@ function setupLiveSearch(inputEl, getItems, fields, onFiltered) {
   });
 }
 
+// Deep links use the URL hash as "#key=value" (e.g. #todo=fix-bug,
+// #knowledge=tools/git/rebase.md) so they work on static hosting.
+
+// eslint-disable-next-line no-unused-vars
+function getDeepLink(key) {
+  var hash = (window.location && window.location.hash) || '';
+  if (hash.charAt(0) === '#') hash = hash.substring(1);
+  var eq = hash.indexOf('=');
+  if (eq === -1 || hash.substring(0, eq) !== key) return null;
+  try {
+    return decodeURIComponent(hash.substring(eq + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+// eslint-disable-next-line no-unused-vars
+function setDeepLink(key, value) {
+  // Keep slashes literal so knowledge paths stay readable in the URL.
+  var hash = value ? '#' + key + '=' + encodeURIComponent(value).replace(/%2F/gi, '/') : '';
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', hash || window.location.pathname);
+  } else {
+    window.location.hash = hash;
+  }
+}
+
 // eslint-disable-next-line no-unused-vars
 function escapeHtml(str) {
   if (!str) return '';

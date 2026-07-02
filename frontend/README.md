@@ -25,6 +25,18 @@ A PWA for capturing thoughts from mobile. Deployed via GitHub Pages.
 
 4. **Google OAuth redirect**: For sign-in to work locally, add `http://localhost:8000` as an allowed redirect URL in your Supabase dashboard (Authentication > URL Configuration).
 
+## Deep links
+
+The browse pages support hash-based deep links (they work on static hosting — no server routing needed):
+
+| Page | Format | Example |
+|------|--------|---------|
+| TODOs | `browse/todos/#todo=<name>` | `browse/todos/#todo=fix-bug` |
+| Captures | `browse/captures/#capture=<id>` | `browse/captures/#capture=3f2a…` |
+| Knowledge | `browse/knowledge/#knowledge=<path>` | `browse/knowledge/#knowledge=tools/git/rebase.md` |
+
+On load the linked item is expanded (todos/knowledge) or highlighted (captures) and scrolled into view. If a linked todo or capture isn't in the default filter, it is fetched directly and shown on top. Expanding/collapsing a todo or knowledge card updates the URL hash so the current view can be copied as a link.
+
 ## Tests
 
 From the project root:

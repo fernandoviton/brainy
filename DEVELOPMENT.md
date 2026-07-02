@@ -19,6 +19,22 @@ python -m venv tools/.venv && tools/.venv/Scripts/pip install -r tools/requireme
 |--------|---------|
 | `node tools/convert-capture-pdfs.js` | Batch-convert all unconverted PDF capture media to Markdown (`.pdf.md`) via `marker-pdf`. Run before processing captures. |
 
+## Running the frontend locally
+
+The `frontend/` directory is a **static site** — no build step and no backend server. Everything (Supabase auth, browse pages, deep linking) runs client-side. `frontend/config.local.js` (gitignored) holds the Supabase URL + publishable key that the pages read at load; each `index.html` loads `config.local.js` before `config.js`.
+
+To test working-tree changes, serve `frontend/` over HTTP (opening the files as `file://` breaks the relative `../../config.local.js` script paths and Supabase auth):
+
+```bash
+cd frontend && python -m http.server 8080 --bind 127.0.0.1
+```
+
+Then open `http://127.0.0.1:8080/` (browse pages under `/browse/todos/`, `/browse/captures/`, `/browse/knowledge/`). It serves working-tree files directly, so edits show up on a browser refresh — no restart needed.
+
+Deep linking: each browse page reads a query param and auto-opens the matching item — `?todo=<name>`, `?capture=<id>`, `?knowledge=<path>`.
+
+`scripts/inject-config.js` bakes `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` env vars into `config.js` for hosted deploys; not needed locally when `config.local.js` is present.
+
 ## Project layout
 
 - `backend/storage-supabase.js` — all Supabase CRUD. Every public function is exported from `module.exports` at the bottom. This is the only file that talks to Supabase.
