@@ -187,3 +187,8 @@ main {
   color: var(--ink-light);
   font-size: 0.95rem;
 }
+
+.card-highlight {
+  border: 1px solid #C4652A;
+  box-shadow: 0 0 0 3px rgba(196, 101, 42, 0.15);
+}

@@ -10,6 +10,7 @@ var searchEl = document.getElementById('text-search');
 
 var _processedFilter = 'unprocessed';
 var _captures = [];
+var _deepLinkCaptureId = getDeepLink('capture');
 
 // Captures longer than this (chars) render collapsed with a Show more toggle.
 var COLLAPSE_THRESHOLD = 300;
@@ -92,7 +93,43 @@ function loadCaptures() {
     }
     _captures = result.data || [];
     renderCaptures(_captures);
+    handleDeepLink();
   });
+}
+
+// On first load, highlight and scroll to the capture named in the URL hash
+// (#capture=<id>). If it isn't in the current filter's results (e.g. a
+// processed capture while the default filter is "unprocessed"), fetch it by
+// id and show it on top.
+function handleDeepLink() {
+  if (!_deepLinkCaptureId) return;
+  var id = _deepLinkCaptureId;
+
+  for (var i = 0; i < _captures.length; i++) {
+    if (String(_captures[i].id) === id) {
+      _deepLinkCaptureId = null;
+      scrollToCapture(id);
+      return;
+    }
+  }
+
+  db.from('brainy_captures')
+    .select('*, brainy_capture_media(filename, content_type, storage_path)')
+    .eq('id', id)
+    .then(function (result) {
+      var rows = (!result.error && result.data) || [];
+      if (rows.length) {
+        _captures = [rows[0]].concat(_captures);
+        renderCaptures(_captures);
+        scrollToCapture(id);
+      }
+      _deepLinkCaptureId = null;
+    });
+}
+
+function scrollToCapture(id) {
+  var card = cardsEl.querySelector('[data-capture-id="' + id + '"]');
+  if (card && card.scrollIntoView) card.scrollIntoView();
 }
 
 if (searchEl) {
@@ -118,16 +155,22 @@ function renderCaptures(captures) {
     var media = c.brainy_capture_media || [];
     var processedClass = c.processed_at ? 'badge-processed' : 'badge-unprocessed';
     var processedLabel = c.processed_at ? 'Processed' : 'Unprocessed';
+    var isTarget = _deepLinkCaptureId !== null && String(c.id) === _deepLinkCaptureId;
 
     var textHtml = '';
     if (c.text) {
       var isLong = c.text.length > COLLAPSE_THRESHOLD;
-      var textClass = isLong ? 'card-text collapsed' : 'card-text';
+      // The deep-linked capture renders with its full text visible.
+      var collapsed = isLong && !isTarget;
+      var textClass = collapsed ? 'card-text collapsed' : 'card-text';
       textHtml = '<div class="' + textClass + '">' + escapeHtml(c.text) + '</div>' +
-        (isLong ? '<button type="button" class="expand-toggle" data-expanded="false">Show more</button>' : '');
+        (isLong
+          ? '<button type="button" class="expand-toggle" data-expanded="' + (collapsed ? 'false' : 'true') + '">' +
+            (collapsed ? 'Show more' : 'Show less') + '</button>'
+          : '');
     }
 
-    html += '<div class="card">' +
+    html += '<div class="card' + (isTarget ? ' card-highlight' : '') + '" data-capture-id="' + escapeHtml(String(c.id)) + '">' +
       textHtml +
       (media.length > 0 ? '<div class="card-media" data-capture="' + i + '">' + renderMediaPlaceholders(media) + '</div>' : '') +
       '<div class="card-meta">' +

@@ -9,6 +9,7 @@ var statusMsg = document.getElementById('status-msg');
 var searchEl = document.getElementById('text-search');
 
 var KNOWLEDGE_LIMIT = 500;
+var _deepLinkPath = getDeepLink('knowledge');
 var _items = [];
 var _atLimit = false;
 var _itemsByPath = {};
@@ -77,7 +78,24 @@ function loadKnowledge() {
     _detailCache = {};
     _attachmentCache = {};
     renderKnowledge(_items);
+    handleDeepLink();
   });
+}
+
+// On first load, expand and scroll to the entry named in the URL hash
+// (#knowledge=<path>). All entries are loaded up front, so no fallback
+// fetch is needed.
+function handleDeepLink() {
+  if (!_deepLinkPath) return;
+  var item = _itemsByPath[_deepLinkPath];
+  _deepLinkPath = null;
+  if (!item) return;
+
+  var card = cardsEl.querySelector('[data-knowledge-path="' + item.path + '"]');
+  if (!card) return;
+  card.classList.add('card-expanded');
+  ensureDetail(card, item);
+  if (card.scrollIntoView) card.scrollIntoView();
 }
 
 function renderPathBreadcrumb(path) {
@@ -154,8 +172,14 @@ cardsEl.addEventListener('click', function (e) {
   if (!item) return;
 
   var expanded = card.classList.toggle('card-expanded');
+  setDeepLink('knowledge', expanded ? item.path : null);
   if (!expanded) return;
 
+  ensureDetail(card, item);
+});
+
+// Build the detail div (content + attachments) unless the card already has one.
+function ensureDetail(card, item) {
   var detail = card.querySelector('.card-detail');
   if (detail) return;
 
@@ -165,7 +189,7 @@ cardsEl.addEventListener('click', function (e) {
   card.appendChild(detail);
 
   loadDetail(item, detail);
-});
+}
 
 function loadDetail(item, detailEl) {
   if (_detailCache[item.path] !== undefined) {

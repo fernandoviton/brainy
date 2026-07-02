@@ -71,12 +71,12 @@ function buildMockDOM() {
     elements,
     listeners,
     getElementById: jest.fn((id) => elements[id]),
-    createElement: jest.fn(() => ({ innerHTML: '', className: '', appendChild: jest.fn() })),
+    createElement: jest.fn(() => ({ innerHTML: '', className: '', appendChild: jest.fn(), querySelectorAll: jest.fn(() => []) })),
     createTextNode: jest.fn((text) => ({ _text: String(text) })),
   };
 }
 
-function loadApp(rows) {
+function loadApp(rows, opts) {
   const mockFrom = jest.fn().mockImplementation(() => buildMockQuery(rows || []));
   let authCallback;
   const mockAuth = {
@@ -95,7 +95,10 @@ function loadApp(rows) {
     CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
     supabase: { createClient: mockCreateClient },
     document: dom,
-    window: { location: { origin: 'https://example.com', pathname: '/browse/knowledge/' } },
+    window: {
+      location: { origin: 'https://example.com', pathname: '/browse/knowledge/', hash: (opts && opts.hash) || '' },
+      history: { replaceState: jest.fn() },
+    },
     console: { error: jest.fn() },
     clearTimeout: () => {},
     setTimeout: (fn) => fn(),
@@ -165,6 +168,87 @@ describe('browse knowledge - live search', () => {
     // The chain.like spy should never have been invoked
     const chain = env.mockFrom.mock.results[0].value;
     expect(chain.like).not.toHaveBeenCalled();
+  });
+});
+
+describe('browse knowledge - deep linking', () => {
+  const sampleRows = [
+    { id: '1', path: 'tools/docker/networking.md', topic: 'Docker networking', summary: 'How docker networks work', updated_at: '2026-04-01T00:00:00Z' },
+    { id: '2', path: 'tools/git/rebase.md', topic: 'Git rebase', summary: 'Rebase patterns', updated_at: '2026-04-02T00:00:00Z' },
+  ];
+
+  function makeCard() {
+    return {
+      classList: { add: jest.fn(), contains: jest.fn(() => false), toggle: jest.fn(() => true) },
+      querySelector: jest.fn(() => null),
+      appendChild: jest.fn(),
+      scrollIntoView: jest.fn(),
+    };
+  }
+
+  test('hash #knowledge=<path> expands the matching card on load and scrolls to it', async () => {
+    const env = loadApp(sampleRows, { hash: '#knowledge=tools/git/rebase.md' });
+    const card = makeCard();
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel.indexOf('tools/git/rebase.md') !== -1 ? card : null
+    );
+
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    expect(card.classList.add).toHaveBeenCalledWith('card-expanded');
+    // A detail fetch for the linked entry's id was issued
+    const detailChain = env.mockFrom.mock.results[1].value;
+    expect(detailChain.eq).toHaveBeenCalledWith('id', '2');
+    expect(card.scrollIntoView).toHaveBeenCalled();
+  });
+
+  test('URL-encoded path in the hash is decoded before lookup', async () => {
+    const env = loadApp(sampleRows, { hash: '#knowledge=tools%2Fgit%2Frebase.md' });
+    const card = makeCard();
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel.indexOf('tools/git/rebase.md') !== -1 ? card : null
+    );
+
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    expect(card.classList.add).toHaveBeenCalledWith('card-expanded');
+  });
+
+  test('expanding a card writes #knowledge=<path> to the URL', async () => {
+    const env = loadApp(sampleRows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    const card = makeCard();
+    card.getAttribute = jest.fn(() => 'tools/git/rebase.md');
+    const toggle = {
+      classList: { contains: jest.fn(() => true) },
+      closest: jest.fn(() => card),
+    };
+    env.dom.listeners['cards:click']({ target: toggle });
+    await flushPromises();
+
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '#knowledge=tools/git/rebase.md');
+  });
+
+  test('collapsing a card clears the URL hash', async () => {
+    const env = loadApp(sampleRows);
+    env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
+    await flushPromises();
+
+    const card = makeCard();
+    card.classList.toggle = jest.fn(() => false);
+    card.getAttribute = jest.fn(() => 'tools/git/rebase.md');
+    const toggle = {
+      classList: { contains: jest.fn(() => true) },
+      closest: jest.fn(() => card),
+    };
+    env.dom.listeners['cards:click']({ target: toggle });
+    await flushPromises();
+
+    expect(env.ctx.window.history.replaceState).toHaveBeenCalledWith(null, '', '/browse/knowledge/');
   });
 });
 
