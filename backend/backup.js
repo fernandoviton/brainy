@@ -16,6 +16,7 @@ const path = require('path');
 const { realGit } = require('./git-utils');
 
 const MANIFEST_VERSION = 1;
+const MANIFEST_FILE = 'manifest.json';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Marker file identifying a folder as a Brainy backup repo, so we never write
@@ -192,11 +193,14 @@ async function exportBackup({
     lastRunAt: now.toISOString(),
     counts,
   };
-  writeFile(targetPath, ['manifest.json'], JSON.stringify(newManifest, null, 2));
+  writeFile(targetPath, [MANIFEST_FILE], JSON.stringify(newManifest, null, 2));
 
-  // Commit the snapshot so the target repo carries local history.
+  // Commit the snapshot so the target repo carries local history. The reported
+  // delta — and the decision to commit at all — ignores manifest.json, whose
+  // timestamp changes every run; a run that only bumps the manifest is not a
+  // real change and shouldn't create a noise commit.
   git.addAll(targetPath);
-  const gitStats = git.diffStat(targetPath);
+  const gitStats = git.diffStat(targetPath, [MANIFEST_FILE]);
   const hasChanges = gitStats.files > 0 || gitStats.insertions > 0 || gitStats.deletions > 0;
   if (hasChanges) {
     const stamp = now.toISOString().slice(0, 16).replace('T', ' ');
@@ -239,7 +243,7 @@ function formatBackupResult(result) {
   const g = result.git || {};
   const commitPart = result.committed
     ? `committed +${g.insertions || 0}/-${g.deletions || 0} across ${g.files || 0} files`
-    : 'no changes to commit';
+    : 'no content changes to commit';
   return (
     `🧠 Backup complete — ${c.todos || 0} todos, ${c.knowledge || 0} knowledge, ` +
     `${c.captures || 0} captures, ${c.files || 0} files (${c.filesDownloaded || 0} new) · ` +

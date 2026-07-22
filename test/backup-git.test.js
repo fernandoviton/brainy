@@ -90,6 +90,20 @@ describe('exportBackup with real git', () => {
     expect(fs.readFileSync(path.join(targetPath, 'knowledge', 'a.md'), 'utf8')).toBe('v2 changed');
   });
 
+  test('does not commit (and reports no content changes) when only the manifest changed', async () => {
+    const targetPath = tmpTarget();
+    const storage = fakeStore({ knowledge: [{ path: 'a.md', content: 'stable' }] });
+
+    await exportBackup({ storage, targetPath, force: true, git: realGit() });
+    // Same store on the second run → only manifest.json's timestamp differs.
+    const second = await exportBackup({ storage, targetPath, force: true, git: realGit() });
+
+    expect(second.committed).toBe(false);
+    expect(second.git).toEqual({ files: 0, insertions: 0, deletions: 0 });
+    // Still exactly one commit — no manifest-only noise commit.
+    expect(git(targetPath, ['rev-list', '--count', 'HEAD'])).toBe('1');
+  });
+
   test('refuses a non-empty, non-repo target', async () => {
     const targetPath = tmpTarget();
     fs.writeFileSync(path.join(targetPath, 'stray.txt'), 'existing junk');

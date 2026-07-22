@@ -312,7 +312,7 @@ describe('formatBackupResult', () => {
       git: { files: 0, insertions: 0, deletions: 0 },
       durationMs: 40,
     });
-    expect(line.toLowerCase()).toContain('no changes');
+    expect(line.toLowerCase()).toContain('no content changes');
   });
 
   test('summarizes a skipped run with the reason', () => {

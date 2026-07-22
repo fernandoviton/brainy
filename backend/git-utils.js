@@ -44,8 +44,13 @@ function realGit() {
       const res = run(dir, ['add', '-A']);
       if (res.status !== 0) throw new Error(`git add failed: ${res.stderr || res.stdout}`);
     },
-    diffStat(dir) {
-      const res = run(dir, ['diff', '--cached', '--shortstat']);
+    diffStat(dir, exclude = []) {
+      const args = ['diff', '--cached', '--shortstat'];
+      if (exclude.length) {
+        // `. :(exclude)<path>` = everything except the excluded pathspecs.
+        args.push('--', '.', ...exclude.map((e) => `:(exclude)${e}`));
+      }
+      const res = run(dir, args);
       return parseShortstat(res.stdout);
     },
     commit(dir, message) {
