@@ -4,30 +4,7 @@ Reference for modifying Brainy's own codebase (backend, CLI, tests, schema).
 
 ## Setup
 
-```bash
-npm install
-python -m venv tools/.venv && tools/.venv/Scripts/pip install -r tools/requirements.txt
-node scripts/setup-hooks.js
-```
-
-## Local hooks (SessionStart / Stop)
-
-The `SessionStart` and `Stop` hooks (promote scheduled TODOs on session start; check Supabase
-auth on stop, see `.claude/hooks/`) need an absolute path to this repo baked into their
-`command`. That path is machine- and clone-specific, so it can't live in the git-tracked
-`.claude/settings.json` — it lives in `.claude/settings.local.json` instead, which is gitignored.
-
-Run once after cloning (and again any time the repo is moved or re-cloned to a new path):
-
-```bash
-node scripts/setup-hooks.js
-```
-
-This writes/repairs the `hooks` section of `.claude/settings.local.json` with the correct
-absolute path for the current checkout, without touching any other settings already there. It's
-idempotent — safe to run any time. `node scripts/setup-hooks.js --check` reports whether the
-hooks are configured correctly without writing anything (exit 0/1) — Claude runs this
-automatically at the start of a session and offers to fix it if it fails; see `CLAUDE.md`.
+See `FIRST-TIME-SETUP.md` for one-time setup after cloning.
 
 ## Development Practice
 
