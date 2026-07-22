@@ -37,6 +37,7 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
 - `backend/storage-supabase.js` — all Supabase CRUD. Every public function is exported from `module.exports` at the bottom. This is the only file that talks to Supabase.
 - `backend/cli.js` — CLI routing and output formatting. Commands dispatch under `resource === 'todo'` / `'capture'` / `'knowledge'` branches. Argument parsing converts `--kebab-case` flags to camelCase.
 - `backend/capture-service.js` — thin orchestration layer over storage for captures (e.g., joining media to captures). Follow this pattern if a CLI command needs to compose multiple storage calls.
+- `backend/backup.js` — backup engine. `exportBackup()` dumps the whole store to a local folder tree (throttled by `minIntervalDays`); depends on storage only via `exportAll()` + `downloadMedia()` so it's unit-testable with a mock. `.claude/hooks/run_backup.js` runs it on session start. Config lives in `backup.config.json` (gitignored).
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.
 
 ## Test patterns

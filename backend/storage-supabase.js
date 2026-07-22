@@ -305,6 +305,55 @@ async function upsertKnowledge({ path: knowledgePath, content, topic, summary })
   return { path: knowledgePath, upserted: true };
 }
 
+// Full-store dump for backups. Bulk-selects every brainy_* table (including the
+// archive tables, which have no other read path) scoped to the current user.
+// Binary blobs are referenced by storage_path; the caller downloads them via
+// downloadMedia. Keeping this here preserves the rule that only this file talks
+// to Supabase.
+async function exportAll() {
+  const userId = await getUserId();
+
+  async function all(table, columns) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return data || [];
+  }
+
+  const [
+    todos,
+    collateral,
+    knowledge,
+    knowledgeAttachments,
+    archiveEntries,
+    archiveSummaries,
+    captures,
+    captureMedia,
+  ] = await Promise.all([
+    all('brainy_todos', '*'),
+    all('brainy_todo_collateral', 'todo_id, filename, content_type, text_content, storage_path'),
+    all('brainy_knowledge', 'path, topic, summary, content'),
+    all('brainy_knowledge_attachments', 'path, filename, storage_path'),
+    all('brainy_archive_entries', '*'),
+    all('brainy_archive_summaries', 'year_month, content'),
+    all('brainy_captures', '*'),
+    all('brainy_capture_media', 'capture_id, filename, content_type, storage_path'),
+  ]);
+
+  return {
+    todos,
+    collateral,
+    knowledge,
+    knowledgeAttachments,
+    archiveEntries,
+    archiveSummaries,
+    captures,
+    captureMedia,
+  };
+}
+
 async function checkIntegrity() {
   const userId = await getUserId();
   const errors = [];
@@ -778,6 +827,7 @@ module.exports = {
   listKnowledge,
   getKnowledge,
   upsertKnowledge,
+  exportAll,
   checkIntegrity,
   promoteScheduled,
   listCaptures,
