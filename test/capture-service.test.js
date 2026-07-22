@@ -4,6 +4,7 @@ const mockStorage = {
   resolveCaptureId: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
+  deleteCapture: jest.fn(),
   createSignedMediaUrls: jest.fn(),
 };
 
@@ -187,6 +188,29 @@ describe('processCapture', () => {
     expect(mockStorage.resolveCaptureId).toHaveBeenCalledWith('abcd1234');
     expect(mockStorage.processCapture).toHaveBeenCalledWith(fullId);
     expect(result).toEqual({ id: fullId, processed: true });
+  });
+});
+
+describe('deleteCapture', () => {
+  test('resolves ID then delegates to storage', async () => {
+    const fullId = 'abcd1234-0000-0000-0000-000000000000';
+    mockStorage.resolveCaptureId.mockResolvedValue(fullId);
+    mockStorage.deleteCapture.mockResolvedValue({ id: fullId, deleted: true });
+
+    const result = await captureService.deleteCapture('abcd1234');
+
+    expect(mockStorage.resolveCaptureId).toHaveBeenCalledWith('abcd1234');
+    expect(mockStorage.deleteCapture).toHaveBeenCalledWith(fullId);
+    expect(result).toEqual({ id: fullId, deleted: true });
+  });
+
+  test('returns null when short ID resolves to null', async () => {
+    mockStorage.resolveCaptureId.mockResolvedValue(null);
+
+    const result = await captureService.deleteCapture('deadbeef');
+
+    expect(mockStorage.deleteCapture).not.toHaveBeenCalled();
+    expect(result).toBeNull();
   });
 });
 

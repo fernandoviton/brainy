@@ -58,23 +58,69 @@ processedGroup.addEventListener('click', function (e) {
   loadCaptures();
 });
 
-// Expand/collapse long capture text (event delegation on the cards container).
+// Expand/collapse long capture text, and delete (event delegation on the cards container).
 cardsEl.addEventListener('click', function (e) {
   var btn = e.target;
-  if (!btn.classList || !btn.classList.contains('expand-toggle')) return;
-  var textEl = btn.previousElementSibling;
-  if (!textEl) return;
-  var expanded = btn.getAttribute('data-expanded') === 'true';
-  if (expanded) {
-    textEl.classList.add('collapsed');
-    btn.setAttribute('data-expanded', 'false');
-    btn.textContent = 'Show more';
-  } else {
-    textEl.classList.remove('collapsed');
-    btn.setAttribute('data-expanded', 'true');
-    btn.textContent = 'Show less';
+  if (!btn.classList) return;
+
+  if (btn.classList.contains('expand-toggle')) {
+    var textEl = btn.previousElementSibling;
+    if (!textEl) return;
+    var expanded = btn.getAttribute('data-expanded') === 'true';
+    if (expanded) {
+      textEl.classList.add('collapsed');
+      btn.setAttribute('data-expanded', 'false');
+      btn.textContent = 'Show more';
+    } else {
+      textEl.classList.remove('collapsed');
+      btn.setAttribute('data-expanded', 'true');
+      btn.textContent = 'Show less';
+    }
+    return;
+  }
+
+  if (btn.classList.contains('delete-btn')) {
+    var id = btn.getAttribute('data-capture-id');
+    if (!id) return;
+    if (!window.confirm('Delete this capture? This cannot be undone.')) return;
+    handleDeleteCapture(id, btn);
   }
 });
+
+function handleDeleteCapture(id, btn) {
+  btn.disabled = true;
+  deleteCapture(id).then(function () {
+    _captures = _captures.filter(function (c) { return String(c.id) !== id; });
+    renderCaptures(_captures);
+    showStatus('Capture deleted.', 'status-success');
+  }).catch(function (err) {
+    btn.disabled = false;
+    showStatus('Failed to delete: ' + (err && err.message ? err.message : err), 'status-error');
+  });
+}
+
+function deleteCapture(id) {
+  var capture = null;
+  for (var i = 0; i < _captures.length; i++) {
+    if (String(_captures[i].id) === id) { capture = _captures[i]; break; }
+  }
+  var media = (capture && capture.brainy_capture_media) || [];
+  var paths = [];
+  for (var i = 0; i < media.length; i++) {
+    if (media[i].storage_path) paths.push(media[i].storage_path);
+  }
+
+  var removeStep = paths.length
+    ? db.storage.from('brainy_files').remove(paths)
+    : Promise.resolve({ error: null });
+
+  return removeStep.then(function (removeResult) {
+    if (removeResult.error) throw removeResult.error;
+    return db.from('brainy_captures').delete().eq('id', id);
+  }).then(function (deleteResult) {
+    if (deleteResult.error) throw deleteResult.error;
+  });
+}
 
 function loadCaptures() {
   if (searchEl) searchEl.value = '';
@@ -178,6 +224,7 @@ function renderCaptures(captures) {
         '<span class="' + processedClass + '">' + processedLabel + '</span>' +
         (media.length > 0 ? '<span>' + media.length + ' file' + (media.length > 1 ? 's' : '') + '</span>' : '') +
         '<span>' + escapeHtml(formatDate(c.created_at)) + '</span>' +
+        '<button type="button" class="delete-btn" data-capture-id="' + escapeHtml(String(c.id)) + '">Delete</button>' +
       '</div>' +
     '</div>';
   }

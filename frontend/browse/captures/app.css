@@ -188,6 +188,32 @@ main {
   font-size: 0.95rem;
 }
 
+.delete-btn {
+  display: inline-block;
+  width: auto;
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-light);
+  background: none;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  color: #A04420;
+  border-color: #A04420;
+  background: rgba(196, 101, 42, 0.08);
+  transform: none;
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .card-highlight {
   border: 1px solid #C4652A;
   box-shadow: 0 0 0 3px rgba(196, 101, 42, 0.15);

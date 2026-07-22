@@ -48,6 +48,13 @@ async function processCapture(id) {
   return storage.processCapture(resolvedId);
 }
 
+async function deleteCapture(id) {
+  const storage = getStorage();
+  const resolvedId = await storage.resolveCaptureId(id);
+  if (!resolvedId) return null;
+  return storage.deleteCapture(resolvedId);
+}
+
 async function getCaptureMediaUrls(id) {
   const storage = getStorage();
   const resolvedId = await storage.resolveCaptureId(id);
@@ -69,4 +76,4 @@ async function getCaptureMediaUrls(id) {
   }));
 }
 
-module.exports = { listCapturesWithMedia, getCapture, processCapture, getCaptureMediaUrls };
+module.exports = { listCapturesWithMedia, getCapture, processCapture, deleteCapture, getCaptureMediaUrls };
