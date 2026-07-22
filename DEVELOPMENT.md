@@ -4,10 +4,7 @@ Reference for modifying Brainy's own codebase (backend, CLI, tests, schema).
 
 ## Setup
 
-```bash
-npm install
-python -m venv tools/.venv && tools/.venv/Scripts/pip install -r tools/requirements.txt
-```
+See `FIRST-TIME-SETUP.md` for one-time setup after cloning.
 
 ## Development Practice
 
