@@ -202,3 +202,68 @@ describe('processCapture', () => {
     expect(result).toEqual({ id: 'aaa', processed: true });
   });
 });
+
+describe('deleteCapture', () => {
+  test('removes media files from storage then deletes the capture row', async () => {
+    const media = [
+      { storage_path: 'uid/captures/aaa/photo.jpg' },
+      { storage_path: 'uid/captures/aaa/doc.pdf' },
+    ];
+
+    let fromCallCount = 0;
+    mockSupabase.supabase.from.mockImplementation((table) => {
+      fromCallCount++;
+      if (table === 'brainy_capture_media') {
+        const chain = {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+        };
+        chain.then = (resolve) => resolve({ data: media, error: null });
+        return chain;
+      }
+      // brainy_captures delete
+      const chain = {
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+      };
+      chain.then = (resolve) => resolve({ data: null, error: null });
+      return chain;
+    });
+
+    const result = await storage.deleteCapture('aaa');
+
+    expect(mockSupabase.supabase.storage.from).toHaveBeenCalledWith('brainy_files');
+    const bucket = mockSupabase.supabase.storage.from.mock.results[0].value;
+    expect(bucket.remove).toHaveBeenCalledWith([
+      'uid/captures/aaa/photo.jpg',
+      'uid/captures/aaa/doc.pdf',
+    ]);
+    expect(mockSupabase.supabase.from).toHaveBeenCalledWith('brainy_capture_media');
+    expect(mockSupabase.supabase.from).toHaveBeenCalledWith('brainy_captures');
+    expect(result).toEqual({ id: 'aaa', deleted: true });
+  });
+
+  test('skips storage removal when capture has no media', async () => {
+    mockSupabase.supabase.from.mockImplementation((table) => {
+      if (table === 'brainy_capture_media') {
+        const chain = {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+        };
+        chain.then = (resolve) => resolve({ data: [], error: null });
+        return chain;
+      }
+      const chain = {
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+      };
+      chain.then = (resolve) => resolve({ data: null, error: null });
+      return chain;
+    });
+
+    const result = await storage.deleteCapture('aaa');
+
+    expect(mockSupabase.supabase.storage.from).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'aaa', deleted: true });
+  });
+});

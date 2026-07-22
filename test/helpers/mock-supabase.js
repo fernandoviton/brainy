@@ -48,8 +48,15 @@ function setMockSignedUrls(data, error = null) {
   _mockSignedUrls = { data, error };
 }
 
+let _mockRemoveResult = { data: null, error: null };
+
+function setMockRemoveResult(data, error = null) {
+  _mockRemoveResult = { data, error };
+}
+
 const mockStorageFrom = jest.fn(() => ({
   createSignedUrls: jest.fn(() => Promise.resolve(_mockSignedUrls)),
+  remove: jest.fn(() => Promise.resolve(_mockRemoveResult)),
 }));
 
 const supabase = {
@@ -60,9 +67,11 @@ const supabase = {
 function resetMock() {
   _mockResult = { data: [], error: null };
   _mockSignedUrls = { data: [], error: null };
+  _mockRemoveResult = { data: null, error: null };
   supabase.from.mockImplementation(() => buildChain());
   supabase.storage.from.mockImplementation(() => ({
     createSignedUrls: jest.fn(() => Promise.resolve(_mockSignedUrls)),
+    remove: jest.fn(() => Promise.resolve(_mockRemoveResult)),
   }));
 }
 
@@ -75,5 +84,6 @@ module.exports = {
   setMockError,
   setMockSingle,
   setMockSignedUrls,
+  setMockRemoveResult,
   resetMock,
 };

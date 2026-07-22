@@ -12,7 +12,7 @@ const HELP = {
 
 Resources:
   todo                 Manage TODOs (CRUD, archive, collateral)
-  capture              Manage captures (list, get, media, process)
+  capture              Manage captures (list, get, media, process, delete)
   knowledge            Manage knowledge entries (list, get, upsert)
   check-integrity      Run data integrity checks
   promote-scheduled    Promote scheduled TODOs whose date has arrived
@@ -51,7 +51,8 @@ Actions:
   list [--all]          List unprocessed captures (--all includes processed)
   get <id>              Get capture details including media
   media <capture_id>    Get signed download URLs for media (1hr expiry)
-  process <id>          Mark a capture as processed`,
+  process <id>          Mark a capture as processed
+  delete <id>           Delete a capture (processed or unprocessed) and its media`,
 
   knowledge: `Usage: node backend/cli.js knowledge <action> [options]
 
@@ -378,6 +379,12 @@ async function main() {
         if (!id) { console.error('Usage: capture process <id>'); process.exit(1); }
         const result = await captureService.processCapture(id);
         console.log(`Processed: ${result.id}`);
+      } else if (action === 'delete') {
+        const id = rest[0];
+        if (!id) { console.error('Usage: capture delete <id>'); process.exit(1); }
+        const result = await captureService.deleteCapture(id);
+        if (result === null) { console.error(`Capture '${id}' not found`); process.exit(1); }
+        console.log(`Deleted: ${result.id}`);
       } else {
         console.error(`Unknown capture action: ${action}\n`);
         showHelp('capture');

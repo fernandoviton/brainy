@@ -487,6 +487,35 @@ async function processCapture(id) {
   return { id, processed: true };
 }
 
+async function deleteCapture(id) {
+  const userId = await getUserId();
+
+  const { data: media, error: mediaErr } = await supabase
+    .from('brainy_capture_media')
+    .select('storage_path')
+    .eq('user_id', userId)
+    .eq('capture_id', id);
+  if (mediaErr) throw mediaErr;
+
+  const paths = (media || []).map((m) => m.storage_path).filter(Boolean);
+  if (paths.length) {
+    const { error: removeErr } = await supabase.storage
+      .from('brainy_files')
+      .remove(paths);
+    if (removeErr) throw removeErr;
+  }
+
+  // brainy_capture_media rows cascade-delete via the capture_id FK.
+  const { error } = await supabase
+    .from('brainy_captures')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', id);
+  if (error) throw error;
+
+  return { id, deleted: true };
+}
+
 async function downloadMedia(storagePath) {
   const { data, error } = await supabase.storage
     .from('brainy_files')
@@ -757,6 +786,7 @@ module.exports = {
   resolveCaptureId,
   getCapture,
   processCapture,
+  deleteCapture,
   downloadMedia,
   uploadCaptureMedia,
   listCollateral,

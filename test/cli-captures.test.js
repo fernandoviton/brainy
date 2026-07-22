@@ -26,6 +26,7 @@ const mockCaptureService = {
   listCapturesWithMedia: jest.fn(),
   getCapture: jest.fn(),
   processCapture: jest.fn(),
+  deleteCapture: jest.fn(),
   getCaptureMediaUrls: jest.fn(),
 };
 
@@ -155,6 +156,32 @@ describe('capture process', () => {
 
     expect(mockCaptureService.processCapture).toHaveBeenCalledWith('aaa');
     expect(output[0]).toContain('Processed');
+  });
+});
+
+describe('capture delete', () => {
+  test('deletes a processed or unprocessed capture', async () => {
+    mockCaptureService.deleteCapture.mockResolvedValue({ id: 'aaa', deleted: true });
+
+    const { output } = await runCLI(['capture', 'delete', 'aaa']);
+
+    expect(mockCaptureService.deleteCapture).toHaveBeenCalledWith('aaa');
+    expect(output[0]).toContain('Deleted');
+    expect(output[0]).toContain('aaa');
+  });
+
+  test('capture delete with no id exits with error', async () => {
+    const { errors, exitCode } = await runCLI(['capture', 'delete']);
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain('Usage');
+  });
+
+  test('capture delete for not-found capture exits with error', async () => {
+    mockCaptureService.deleteCapture.mockResolvedValue(null);
+
+    const { errors, exitCode } = await runCLI(['capture', 'delete', 'nonexistent']);
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain('not found');
   });
 });
 
