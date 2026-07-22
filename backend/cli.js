@@ -4,6 +4,7 @@
  * Run with "help" or "<resource> help" for usage details.
  */
 const fs = require('fs');
+const path = require('path');
 const { getStorage } = require('./storage');
 const captureService = require('./capture-service');
 
@@ -16,6 +17,7 @@ Resources:
   knowledge            Manage knowledge entries (list, get, upsert)
   check-integrity      Run data integrity checks
   promote-scheduled    Promote scheduled TODOs whose date has arrived
+  backup               Export the whole store to a local folder [--target <p>] [--force] [--config <p>]
 
 Run "node backend/cli.js <resource> help" for details on each resource.
 All commands support --format json for machine-readable output.`,
@@ -435,6 +437,26 @@ async function main() {
       } else {
         console.log(`Promoted ${promoted.length} item(s): ${promoted.join(', ')}`);
       }
+    } else if (resource === 'backup') {
+      const { exportBackup, loadConfig, formatBackupResult } = require('./backup');
+      const configPath = args.config || path.join(__dirname, '..', 'backup.config.json');
+      const config = loadConfig(configPath);
+      const targetPath = args.target || config.targetPath;
+      if (!targetPath) {
+        console.log(
+          'Backup not configured — no target set. To enable local backups, copy ' +
+          'backup.config.example.json to backup.config.json and set "targetPath" to an ' +
+          'empty folder on a backed-up drive. See the "Backups" section in README.md.'
+        );
+        return;
+      }
+      const result = await exportBackup({
+        storage,
+        targetPath,
+        minIntervalDays: config.minIntervalDays,
+        force: !!args.force,
+      });
+      console.log(formatBackupResult(result));
     } else {
       console.error(`Unknown resource: ${resource}\n`);
       showHelp('main');

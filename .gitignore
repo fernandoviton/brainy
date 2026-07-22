@@ -29,3 +29,6 @@ tools/.venv/
 
 # Frontend local config
 frontend/config.local.js
+
+# Backup config (machine-specific target path; see backup.config.example.json)
+backup.config.json

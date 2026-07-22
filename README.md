@@ -72,6 +72,29 @@ node scripts/smoke-test.js
 
 This tests auth, CRUD operations on the `brainy_todos` table, and RLS isolation.
 
+### 7. (Optional) Enable local backups
+
+Brainy can export the entire store — todos, knowledge, captures, archives, and binary files — to a **local git repo** on a backed-up drive. Each run commits a snapshot, so you get local version history; point a service like Carbonite at the folder for off-site/DR coverage.
+
+**Prerequisite:** `git` must be on your PATH (the backup writes and commits a git repo). Verify with `git --version`.
+
+1. Copy the example config and edit it:
+
+   ```bash
+   cp backup.config.example.json backup.config.json
+   ```
+
+   - `targetPath` — an **empty** folder on a backed-up drive (e.g. `D:/brainy-backup`). If it's empty and not yet a repo, Brainy runs `git init` and drops a `.brainy-backup` sentinel file. It refuses to write into a non-empty non-repo folder, or into an existing git repo that lacks the sentinel — so it can never take over an unrelated repo.
+   - `minIntervalDays` — throttle; a backup runs at most this often (default `3`).
+
+2. Run a first backup manually:
+
+   ```bash
+   node backend/cli.js backup --force
+   ```
+
+3. It also runs automatically on session start (see Hooks). `backup.config.json` is gitignored (machine-specific). Restore by browsing/checking out the target repo; binaries live under `files/`.
+
 ## CLI Usage
 
 ### TODOs
@@ -192,7 +215,7 @@ Use these slash commands when working with Claude:
 ## Hooks
 
 Brainy includes Claude Code hooks (in `.claude/hooks/`) that run automatically:
-- **SessionStart**: Promotes scheduled TODOs that are due
+- **SessionStart**: Promotes scheduled TODOs that are due; exports a backup if configured (throttled by `minIntervalDays`, reports via a session message — see [Backups](#7-optional-enable-local-backups))
 - **Stop**: Runs integrity checks after each session
 
 > **Note:** Hooks use `.bat` files (Windows). On other platforms, you'll need to adapt them or replace with equivalent shell scripts.

@@ -53,7 +53,9 @@ All three resources (**todo**, **capture**, **knowledge**) support `list` and `g
 - `todo collateral add <name> <filepath>` — attach a file
 - `todo collateral remove <name> <filename>` — remove attachment
 
-Utilities: `check-integrity`, `promote-scheduled`
+Utilities: `check-integrity`, `promote-scheduled`, `backup`
+
+**Backup:** `backup [--target <path>] [--force] [--config <path>]` exports the entire store (todos, knowledge, captures, archives, and binary files) to a local **git repo** as a browsable tree, committing each run (local version history). Requires `git` on PATH; an empty target is `git init`ed and gets a `.brainy-backup` sentinel file, a non-empty non-repo target is refused, and an existing repo without the sentinel is refused (won't take over an unrelated repo). Reads `backup.config.json` (gitignored; `targetPath` + `minIntervalDays`, see `backup.config.example.json`) and throttles by `minIntervalDays` unless `--force`. Runs automatically on session start via the `run_backup` hook — a no-op most starts (throttle), and reports through a session message including the committed diff size. When unconfigured it prints a setup pointer instead of failing. Carbonite (or similar) handles off-site/DR of the target folder.
 
 **Common command shapes** (so you don't need `--help` for routine work):
 - `todo list [--status <status>] [--all]` — defaults to active; `--all` returns every status
