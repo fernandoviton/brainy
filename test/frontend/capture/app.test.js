@@ -411,6 +411,16 @@ describe('logout', () => {
     expect(mockSignOut).toHaveBeenCalled();
   });
 
+  test('signs out with local scope so the CLI session survives', () => {
+    // Default scope is 'global', which revokes every refresh token for the
+    // user — including the one the CLI stores in .env.
+    const { dom, mockSignOut } = loadApp();
+
+    dom.listeners['logout-btn:click']();
+
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
   test('logout button is inside capture section', () => {
     // Verified by HTML structure — logout only visible when authenticated
     const { dom } = loadApp();

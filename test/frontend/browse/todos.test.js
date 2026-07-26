@@ -809,3 +809,15 @@ describe('todo cards - signed URLs', () => {
     expect(env.mockCreateSignedUrl).toHaveBeenCalledWith('files/report.pdf', 3600);
   });
 });
+
+describe('logout', () => {
+  test('signs out with local scope so the CLI session survives', () => {
+    // Default scope is 'global', which revokes every refresh token for the
+    // user — including the one the CLI stores in .env.
+    const { dom, mockAuth } = loadApp([]);
+
+    dom.listeners['logout-btn:click'][0]();
+
+    expect(mockAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+});
