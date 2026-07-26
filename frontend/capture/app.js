@@ -44,7 +44,9 @@ loginBtn.addEventListener('click', function () {
 });
 
 logoutBtn.addEventListener('click', function () {
-  db.auth.signOut();
+  // 'local' ends only this browser's session. The default, 'global', revokes
+  // every refresh token for the user — including the CLI's in .env.
+  db.auth.signOut({ scope: 'local' });
 });
 
 attachBtn.addEventListener('click', function () {
