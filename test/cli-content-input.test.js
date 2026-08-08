@@ -169,6 +169,111 @@ describe('todo update --field notes --stdin guard', () => {
   });
 });
 
+describe('todo create --field notes', () => {
+  test('--file content is passed through to createTodo as notes', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+    const content = 'Oct 23–25 — book by the fire\nSecond line';
+    const p = tmpFile(content);
+
+    const { exitCode } = await runCLI([
+      'todo', 'create', '--name', 'foo', '--summary', 's', '--field', 'notes', '--file', p,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(mockStorage.createTodo).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'foo', summary: 's', notes: content }),
+    );
+    fs.unlinkSync(p);
+  });
+
+  test('--stdin content is passed through to createTodo as notes', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+
+    const { exitCode } = await withStdin('Oct 23–25 — clean notes', () =>
+      runCLI(['todo', 'create', '--name', 'foo', '--summary', 's', '--field', 'notes', '--stdin']),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockStorage.createTodo).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: 'Oct 23–25 — clean notes' }),
+    );
+  });
+
+  test('the corruption guard rejects mangled stdin and creates nothing', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+
+    const { exitCode, errors } = await withStdin('Oct 23?25 ????1009', () =>
+      runCLI(['todo', 'create', '--name', 'foo', '--summary', 's', '--field', 'notes', '--stdin']),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(mockStorage.createTodo).not.toHaveBeenCalled();
+    expect(errors.join('\n')).toMatch(/--file/);
+  });
+
+  test('--file bypasses the corruption guard on create too', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+    const content = 'literal 23?25 and ????1009 via file';
+    const p = tmpFile(content);
+
+    const { exitCode } = await runCLI([
+      'todo', 'create', '--name', 'foo', '--summary', 's', '--field', 'notes', '--file', p,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(mockStorage.createTodo).toHaveBeenCalledWith(expect.objectContaining({ notes: content }));
+    fs.unlinkSync(p);
+  });
+
+  test('create always resolves notes explicitly, and leaves it unset with no flags', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+
+    const { exitCode } = await runCLI(['todo', 'create', '--name', 'foo', '--summary', 's']);
+
+    expect(exitCode).toBe(0);
+    const arg = mockStorage.createTodo.mock.calls[0][0];
+    // The key must be present: `create` now always computes a notes value and
+    // hands it to storage (which maps undefined -> null). Asserting only that
+    // `arg.notes` is undefined would also pass against the old code, where the
+    // key was simply absent — i.e. it would guard nothing.
+    expect(Object.prototype.hasOwnProperty.call(arg, 'notes')).toBe(true);
+    expect(arg.notes).toBeUndefined();
+  });
+
+  // Empty content is an error on every content command, not a silent blank
+  // write: a truncated or never-written tmp/ file must not reach storage. (This
+  // test previously asserted the opposite — that an empty --file was accepted
+  // and stored as '' — which left `todo create/update` inconsistent with
+  // `knowledge upsert`, where the same input is rejected.)
+  test('create with an empty --file is rejected rather than storing an empty body', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+    const p = tmpFile('');
+
+    const { exitCode, errors } = await runCLI([
+      'todo', 'create', '--name', 'foo', '--summary', 's', '--field', 'notes', '--file', p,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/empty/i);
+    expect(mockStorage.createTodo).not.toHaveBeenCalled();
+    fs.unlinkSync(p);
+  });
+
+  test('update with a whitespace-only --file is rejected, and --clear is the way to blank notes', async () => {
+    mockStorage.updateTodo.mockResolvedValue({ name: 'foo', status: 'active' });
+    const p = tmpFile('   \n\n\t');
+
+    const blank = await runCLI(['todo', 'update', 'foo', '--field', 'notes', '--file', p]);
+    expect(blank.exitCode).toBe(1);
+    expect(mockStorage.updateTodo).not.toHaveBeenCalled();
+
+    const cleared = await runCLI(['todo', 'update', 'foo', '--field', 'notes', '--clear']);
+    expect(cleared.exitCode).toBe(0);
+    expect(mockStorage.updateTodo).toHaveBeenCalledWith('foo', { notes: null });
+    fs.unlinkSync(p);
+  });
+});
+
 describe('knowledge upsert --file', () => {
   test('reads file content and passes it to upsertKnowledge', async () => {
     mockStorage.upsertKnowledge.mockResolvedValue({ path: 'a/b.md' });
