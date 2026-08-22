@@ -474,3 +474,239 @@ describe('logout', () => {
     expect(mockAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
   });
 });
+
+// ── Search covers the whole result set, and survives a filter switch ────
+
+/**
+ * A query mock that behaves like the server: it applies the processed filter
+ * the app asked for, then truncates to the requested row cap. loadApp's shared
+ * mock lets each test hand-write `then`, which hides both behaviours.
+ */
+function buildLimitedQuery(allRows) {
+  const q = {
+    _limit: null,
+    _mode: 'all',
+    select: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn(function (n) { q._limit = n; return q; }),
+    eq: jest.fn().mockReturnThis(),
+    is: jest.fn(function () { q._mode = 'unprocessed'; return q; }),
+    not: jest.fn(function () { q._mode = 'processed'; return q; }),
+    then: jest.fn(function (cb) {
+      let rows = (allRows || []).filter(function (c) {
+        if (q._mode === 'unprocessed') return !c.processed_at;
+        if (q._mode === 'processed') return !!c.processed_at;
+        return true;
+      });
+      if (q._limit !== null) rows = rows.slice(0, q._limit);
+      cb({ data: rows, error: null });
+      return Promise.resolve();
+    }),
+  };
+  return q;
+}
+
+function loadAppForFilters(allRows) {
+  const queries = [];
+  const deleted = [];
+  const mockFrom = jest.fn(function () {
+    const q = buildLimitedQuery(allRows);
+    q.delete = jest.fn(function () {
+      return {
+        eq: jest.fn(function (col, val) {
+          deleted.push(val);
+          return Promise.resolve({ error: null });
+        }),
+      };
+    });
+    queries.push(q);
+    return q;
+  });
+  let authCallback;
+  const mockAuth = {
+    onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
+    signInWithOAuth: jest.fn(),
+    signOut: jest.fn().mockResolvedValue({}),
+  };
+  const mockCreateClient = jest.fn().mockReturnValue({
+    auth: mockAuth,
+    from: mockFrom,
+    storage: {
+      from: jest.fn().mockReturnValue({
+        createSignedUrl: jest.fn().mockResolvedValue({ data: null }),
+        remove: jest.fn().mockResolvedValue({ error: null }),
+      }),
+    },
+  });
+  const dom = buildMockDOM();
+  const ctx = {
+    CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
+    supabase: { createClient: mockCreateClient },
+    document: dom,
+    window: {
+      location: { origin: 'https://example.com', pathname: '/browse/captures/', hash: '' },
+      history: { replaceState: jest.fn() },
+      confirm: jest.fn(() => true),
+      open: jest.fn(),
+    },
+    console: { error: jest.fn() },
+    Promise: Promise,
+  };
+  vm.createContext(ctx);
+  vm.runInContext(utilsCode, ctx);
+  vm.runInContext(appCode, ctx);
+
+  return {
+    ctx, dom, mockFrom, queries, deleted, authCallback,
+    lastQuery: () => queries[queries.length - 1],
+    signIn: async () => { authCallback('SIGNED_IN', { user: { id: '123' } }); await flushPromises(); },
+    clickFilter: async (value) => {
+      const pill = {
+        classList: { contains: jest.fn((c) => c === 'pill'), remove: jest.fn(), add: jest.fn() },
+        getAttribute: jest.fn(() => value),
+      };
+      dom.elements['processed-filter'].querySelectorAll.mockReturnValue([pill]);
+      dom.listeners['processed-filter:click']({ target: pill });
+      await flushPromises();
+    },
+    type: async (text) => {
+      dom.elements['text-search'].value = text;
+      dom.listeners['text-search:input']();
+      await flushPromises();
+    },
+    cardsHtml: () => dom.elements['cards'].innerHTML,
+  };
+}
+
+/**
+ * `count` captures, half processed, with the search target LAST and
+ * unprocessed — so a row cap on the unfiltered "All" load drops it while the
+ * narrower Unprocessed filter stays under the cap and still shows it.
+ */
+function makeOversizedCaptures(count, targetText) {
+  const rows = [];
+  for (let i = 0; i < count - 1; i++) {
+    rows.push({
+      id: i + 1,
+      text: 'Filler capture ' + i,
+      processed_at: i % 2 === 0 ? '2026-05-01T10:00:00Z' : null,
+      created_at: '2026-0' + (1 + (i % 8)) + '-01T10:00:00Z',
+      brainy_capture_media: [],
+    });
+  }
+  rows.push({
+    id: 9999,
+    text: targetText,
+    processed_at: null,
+    created_at: '2026-01-01T00:00:00Z',
+    brainy_capture_media: [],
+  });
+  return rows;
+}
+
+describe('browse captures - search reaches past the first page of rows', () => {
+  const store = makeOversizedCaptures(58, 'margin-account paperwork for the Bellevue branch');
+
+  test('REPRO: under All, a capture past row 50 is still findable by search', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.clickFilter(''); // "All"
+
+    await env.type('margin-account');
+
+    expect(env.cardsHtml()).toContain('margin-account paperwork');
+  });
+
+  test('the same search under Unprocessed finds it (why the bug looked filter-specific)', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn(); // default filter is already unprocessed
+
+    await env.type('margin-account');
+
+    expect(env.cardsHtml()).toContain('margin-account paperwork');
+  });
+
+  test('captures get the large cap: processing never deletes them, so they only accumulate', async () => {
+    // `capture process` just stamps processed_at — nothing ever removes a
+    // capture, so the All and Processed views grow without bound.
+    const env = loadAppForFilters(store);
+    await env.signIn();
+
+    expect(env.lastQuery()._limit).toBeGreaterThanOrEqual(5000);
+  });
+
+  test('a truncated result set says so instead of silently hiding rows', async () => {
+    const env = loadAppForFilters(makeOversizedCaptures(10000, 'margin-account paperwork'));
+    await env.signIn();
+
+    expect(env.cardsHtml()).toContain('limit-warning');
+  });
+
+  test('an untruncated result set shows no limit note', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+
+    expect(env.cardsHtml()).not.toContain('limit-warning');
+  });
+
+  test('the truncation notice leads with a warning emoji and says the list is incomplete', async () => {
+    const env = loadAppForFilters(makeOversizedCaptures(10000, 'margin-account paperwork'));
+    await env.signIn();
+
+    expect(env.cardsHtml()).toContain('⚠');
+    expect(env.cardsHtml().toLowerCase()).toContain('incomplete');
+  });
+});
+
+describe('browse captures - switching filters keeps the search text', () => {
+  const store = makeOversizedCaptures(58, 'margin-account paperwork for the Bellevue branch');
+
+  test('switching the processed filter does not clear the search box', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    await env.clickFilter('');
+
+    expect(env.dom.elements['text-search'].value).toBe('margin-account');
+  });
+
+  test('the reloaded rows are re-filtered by the surviving search text', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    await env.clickFilter('');
+
+    expect(env.cardsHtml()).toContain('margin-account paperwork');
+    expect(env.cardsHtml()).not.toContain('Filler capture 0');
+  });
+
+  test('clearing the search box after a filter switch restores the full list', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+    await env.clickFilter('');
+
+    await env.type('');
+
+    expect(env.cardsHtml()).toContain('Filler capture 0');
+  });
+
+  test('deleting a capture leaves the active search filter applied', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    const btn = {
+      disabled: false,
+      classList: { contains: jest.fn((c) => c === 'delete-btn') },
+      getAttribute: jest.fn(() => '1'),
+    };
+    env.dom.listeners['cards:click']({ target: btn });
+    await flushPromises();
+
+    expect(env.deleted).toContain('1');
+    expect(env.cardsHtml()).not.toContain('Filler capture 2');
+  });
+});

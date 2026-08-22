@@ -137,18 +137,18 @@ describe('browse knowledge - live search', () => {
     expect(cardCount(env.dom.elements['cards'].innerHTML)).toBe(1);
   });
 
-  test('initial query limit raised from 100 to 500', async () => {
+  test('knowledge gets the large cap: entries are never deleted, only upserted', async () => {
+    // There is no `knowledge delete` command — the store only ever grows, so
+    // it takes the unbounded-store cap rather than the live-TODO one.
     const env = loadApp([]);
     env.getAuthCallback()('SIGNED_IN', { user: { id: 'u' } });
     await flushPromises();
-    // The query chain's .limit was called with the configured KNOWLEDGE_LIMIT
-    // We can verify indirectly: 500 must be the value the app passed.
-    expect(env.ctx.KNOWLEDGE_LIMIT).toBe(500);
+    expect(env.ctx.KNOWLEDGE_LIMIT).toBe(5000);
   });
 
-  test('"showing first 500" indicator renders when row count hits the limit', async () => {
+  test('truncation warning renders when row count hits the limit', async () => {
     const rows = [];
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < 5000; i++) {
       rows.push({ id: String(i), path: 'a/' + i, topic: 't', summary: 's', updated_at: '2026-04-01T00:00:00Z' });
     }
     const env = loadApp(rows);
@@ -156,8 +156,10 @@ describe('browse knowledge - live search', () => {
     await flushPromises();
 
     const html = env.dom.elements['cards'].innerHTML;
-    expect(html).toContain('knowledge-limit-note');
-    expect(html).toContain('500');
+    expect(html).toContain('limit-warning');
+    expect(html).toContain('5000');
+    expect(html).toContain('⚠');
+    expect(html.toLowerCase()).toContain('incomplete');
   });
 
   test('does not call .like (server-side prefix search removed)', async () => {

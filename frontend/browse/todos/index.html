@@ -24,13 +24,17 @@
       <div id="filters">
         <div class="filter-group">
           <span class="filter-label">Status</span>
+          <!-- "All" spans the live statuses to its right, up to the divider.
+               Archived sits past the divider because it is a separate store,
+               not one more status All rolls up. -->
           <div class="filter-pills" id="status-filter">
-            <button class="pill" data-value="">All</button>
+            <button class="pill" data-value="" title="Every live TODO — inbox, active, later and scheduled. Does not include archived.">All</button>
             <button class="pill" data-value="inbox">Inbox</button>
             <button class="pill active" data-value="active">Active</button>
             <button class="pill" data-value="later">Later</button>
             <button class="pill" data-value="scheduled">Scheduled</button>
-            <button class="pill" data-value="archived">Archived</button>
+            <span class="pill-divider" aria-hidden="true"></span>
+            <button class="pill pill-archived" data-value="archived" title="Completed and archived TODOs, kept separately — these are not included in All.">Archived</button>
           </div>
         </div>
         <div class="filter-group">

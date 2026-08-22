@@ -8,12 +8,31 @@ var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 var searchEl = document.getElementById('text-search');
 
+// Row cap for a single load. Search is client-side over the loaded rows, so a
+// cap smaller than the store hides real matches — at 50 rows an unfiltered
+// "All" load silently dropped everything older, and no amount of typing could
+// surface it. If a load ever does hit this cap, say so rather than truncating
+// in silence.
+//
+// Captures never drain: `capture process` only stamps processed_at, and
+// nothing but an explicit delete removes a row — so All and Processed grow
+// without bound and take the large cap.
+var CAPTURE_LIMIT = 5000;
+var SEARCH_FIELDS = ['text'];
+
 var _processedFilter = 'unprocessed';
+var _atLimit = 0; // rows returned by the last load IF it came back full, else 0
 var _captures = [];
 var _deepLinkCaptureId = getDeepLink('capture');
 
 // Captures longer than this (chars) render collapsed with a Show more toggle.
 var COLLAPSE_THRESHOLD = 300;
+
+// Render the loaded rows through the search box, so a reload triggered by a
+// filter switch (or a delete) keeps honouring whatever the user has typed.
+function renderFiltered() {
+  renderCaptures(filterItems(_captures, SEARCH_FIELDS, searchEl ? searchEl.value : ''));
+}
 
 function showStatus(message, className) {
   statusMsg.textContent = message;
@@ -93,7 +112,7 @@ function handleDeleteCapture(id, btn) {
   btn.disabled = true;
   deleteCapture(id).then(function () {
     _captures = _captures.filter(function (c) { return String(c.id) !== id; });
-    renderCaptures(_captures);
+    renderFiltered();
     showStatus('Capture deleted.', 'status-success');
   }).catch(function (err) {
     btn.disabled = false;
@@ -125,11 +144,10 @@ function deleteCapture(id) {
 }
 
 function loadCaptures() {
-  if (searchEl) searchEl.value = '';
   var query = db.from('brainy_captures')
     .select('*, brainy_capture_media(filename, content_type, storage_path)')
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(CAPTURE_LIMIT);
 
   if (_processedFilter === 'processed') query = query.not('processed_at', 'is', null);
   if (_processedFilter === 'unprocessed') query = query.is('processed_at', null);
@@ -140,7 +158,8 @@ function loadCaptures() {
       return;
     }
     _captures = result.data || [];
-    renderCaptures(_captures);
+    _atLimit = _captures.length >= CAPTURE_LIMIT ? CAPTURE_LIMIT : 0;
+    renderFiltered();
     handleDeepLink();
   });
 }
@@ -168,7 +187,8 @@ function handleDeepLink() {
       var rows = (!result.error && result.data) || [];
       if (rows.length) {
         _captures = [rows[0]].concat(_captures);
-        renderCaptures(_captures);
+        // Deep links resolve on first load, while the search box is empty.
+        renderFiltered();
         scrollToCapture(id);
       }
       _deepLinkCaptureId = null;
@@ -181,7 +201,7 @@ function scrollToCapture(id) {
 }
 
 if (searchEl) {
-  setupLiveSearch(searchEl, function () { return _captures; }, ['text'], renderCaptures);
+  setupLiveSearch(searchEl, function () { return _captures; }, SEARCH_FIELDS, renderCaptures);
 }
 
 function getSignedUrl(storagePath) {
@@ -192,12 +212,20 @@ function getSignedUrl(storagePath) {
 }
 
 function renderCaptures(captures) {
+  var limitNote = _atLimit
+    ? '<div class="limit-warning">' +
+        '<span class="limit-warning-icon" aria-hidden="true">⚠️</span>' +
+      '<span><strong>Incomplete list.</strong> Only the first ' + _atLimit + ' captures' +
+      ' loaded — there are more, and the search box cannot see them. Narrow the filters to trust what you see.</span>' +
+      '</div>'
+    : '';
+
   if (!captures || captures.length === 0) {
-    cardsEl.innerHTML = '<div class="empty-state">No captures found.</div>';
+    cardsEl.innerHTML = limitNote + '<div class="empty-state">No captures found.</div>';
     return;
   }
 
-  var html = '';
+  var html = limitNote;
   for (var i = 0; i < captures.length; i++) {
     var c = captures[i];
     var media = c.brainy_capture_media || [];
