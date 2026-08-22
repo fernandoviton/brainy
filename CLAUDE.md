@@ -39,13 +39,27 @@ Config is in `.env`.
 
 ### CLI Reference
 
-All three resources (**todo**, **capture**, **knowledge**) support `list` and `get <identifier>`. All commands support `--format json`.
+All three resources (**todo**, **capture**, **knowledge**) support `list` and `get <identifier>`. All commands support `--format json|text` (`text` = the default human output; anything else is rejected).
+
+**Arguments are validated — a bad argument is an error, not a no-op.** Each of the following exits **1**, names the offender, and touches no storage:
+- an unknown or misspelled flag (`--priorty`), or one the command doesn't support (`todo delete --priority P1`)
+- a **single-dash** flag (`-status active`)
+- a value-taking flag with no value (`todo update x --status` — this used to write `status: true`)
+- a boolean flag given a value (`knowledge upsert --stdin a/b.md` — this used to swallow the path)
+- an unsupported `--format` value (`--format jsonn`)
+- an **extra positional argument** (`todo update my-task active`, `todo list inbox`) — positionals are never shorthand for flags
+- **empty or whitespace-only content** from `--file`/`--stdin` on `todo create`/`todo update`/`knowledge upsert`, and `--stdin` with nothing piped in
+- a missing required argument: `todo create` without `--name`, `todo archive` without `--summary-text`, `todo update <name>` with no field flag
+
+So a non-zero exit here means *nothing was written* — fix the argument and re-run rather than assuming a partial write. `--flag value` and `--flag=value` are equivalent.
+
+**To blank a TODO's notes, use `todo update <name> --field notes --clear`** — an empty `--file`/`--stdin` is rejected rather than treated as a wipe. There is no `--clear` on `todo create` (nothing to clear) or `knowledge upsert` (blanking a knowledge body destroys the record).
 
 | Resource    | Identifier | Extra actions                                       |
 |-------------|------------|-----------------------------------------------------|
 | todo        | `<name>`   | create, update, delete, archive                     |
 | capture     | `<id>`     | media, process                                      |
-| knowledge   | `<path>`   | upsert `<path>` --stdin                             |
+| knowledge   | `<path>`   | upsert `<path>` --file/--stdin (content required)    |
 
 **TODO collateral** (attachments on a TODO):
 - `todo collateral list <name>` — list attached files
@@ -60,11 +74,13 @@ Utilities: `check-integrity`, `promote-scheduled`, `backup`
 **Common command shapes** (so you don't need `--help` for routine work):
 - `todo list [--status <status>] [--all]` — defaults to active; `--all` returns every status
 - `todo get <name>`
-- `todo create --name <n> --summary <s> [--status <s>] [--priority <p>] [--due <date>]`
-- `todo update <name> [--status <s>] [--priority <p>] [--field notes --stdin]`
-- `todo archive <name> --summary-text "<t>" --completion-date <YYYY-MM-DD>`
+- `todo create --name <n> --summary <s> [--status <s>] [--priority <p>] [--due <date>] [--field notes --file <path>]`
+- `todo update <name> [--status <s>] [--priority <p>] [--field notes --file <path>|--stdin|--clear]` — at least one field flag is required
+- `todo archive <name> --summary-text "<t>" [--completion-date <YYYY-MM-DD>]` — `--summary-text` is **required** (archiving deletes the TODO and keeps only this summary)
 - `capture list [--all]` · `capture get <id>` · `capture process <id>`
 - `knowledge list [--prefix <path>]` · `knowledge get <path>` · `knowledge upsert <path> --stdin [--summary <s>]`
+
+**`knowledge upsert` requires exactly one content source with non-empty content** — `--file <path>` (preferred) or `--stdin`, on *every* call. It replaces the entry's whole body, so an upsert with no source, an empty file, an unpiped `--stdin`, or both sources at once would blank or silently half-write a live entry; every one of those exits 1 before touching storage. There is no metadata-only edit: to change `--topic`/`--summary`, `knowledge get <path>` first and re-send the full body with it.
 
 Run `node backend/cli.js <resource> --help` for anything not listed above.
 

@@ -95,7 +95,7 @@ function assertScheduleInvariant(status, scheduled_date) {
   }
 }
 
-async function createTodo({ name, summary, status, priority, category, due, scheduled_date, blocked_by }) {
+async function createTodo({ name, summary, status, priority, category, due, scheduled_date, blocked_by, notes }) {
   const userId = await getUserId();
   status = status || 'inbox';
   assertScheduleInvariant(status, scheduled_date || null);
@@ -104,6 +104,7 @@ async function createTodo({ name, summary, status, priority, category, due, sche
     user_id: userId,
     name,
     summary: summary || '',
+    notes: notes ?? null,
     status,
     priority: priority || 'P2',
     category: category || 'uncategorized',

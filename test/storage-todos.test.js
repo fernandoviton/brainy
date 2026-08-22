@@ -111,6 +111,31 @@ describe('createTodo - schedule invariant', () => {
   });
 });
 
+describe('createTodo - notes', () => {
+  function captureInsert() {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      insert: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+    };
+    chain.then = function (resolve) { return resolve({ data: null, error: null }); };
+    mockSupabase.supabase.from.mockImplementation(() => chain);
+    return chain;
+  }
+
+  test('persists notes when supplied', async () => {
+    const chain = captureInsert();
+    await storage.createTodo({ name: 'a', summary: 's', notes: 'Oct 23–25 — hello' });
+    expect(chain.insert.mock.calls[0][0].notes).toBe('Oct 23–25 — hello');
+  });
+
+  test('stores null when no notes are supplied', async () => {
+    const chain = captureInsert();
+    await storage.createTodo({ name: 'a', summary: 's' });
+    expect(chain.insert.mock.calls[0][0].notes).toBeNull();
+  });
+});
+
 describe('updateTodo - schedule invariant', () => {
   test('rejects moving to scheduled with no scheduled_date provided or existing', async () => {
     mockSupabase.setMockSingle({ status: 'active', scheduled_date: null });

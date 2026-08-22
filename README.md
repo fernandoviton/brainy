@@ -97,6 +97,32 @@ Brainy can export the entire store — todos, knowledge, captures, archives, and
 
 ## CLI Usage
 
+**Arguments are validated.** The CLI never silently ignores something you typed. Each of
+these exits **1** with an error naming the offender, before any storage call:
+
+| Mistake | Example |
+|---|---|
+| Unknown or misspelled flag | `todo create --priorty P1` |
+| Flag the command doesn't support | `todo delete --priority P1` |
+| Single-dash flag | `todo update my-task -status active` |
+| Value-taking flag with no value | `todo update my-task --status` (used to write `status: true`) |
+| Boolean flag given a value | `knowledge upsert --stdin a/b.md` (used to swallow the path) |
+| Unsupported `--format` value | `todo list --format jsonn` |
+| Extra positional argument | `todo update my-task active`, `todo list inbox` |
+| Empty content from `--file`/`--stdin` | an empty or truncated `tmp/notes.md` |
+| Missing required argument | `todo create` with no `--name`, `todo archive` with no `--summary-text` |
+| Nothing to do | `todo update my-task` with no field flag |
+
+A non-zero exit therefore means **nothing was written** — fix the argument and re-run.
+
+`--format` accepts `json` or `text` (`text` is the default human output), and is honoured
+on every command including `todo create`, `capture process`, `check-integrity` and
+`promote-scheduled`. All commands accept `--flag value` and `--flag=value`
+interchangeably, plus `--help`/`-h`.
+
+Positional arguments are never shorthand for flags: `todo list inbox` is an error, not
+`--status inbox`.
+
 ### TODOs
 
 ```bash
@@ -115,13 +141,19 @@ node backend/cli.js todo get <name>
 # Create a TODO
 node backend/cli.js todo create --name "my-task" --summary "Do the thing" --status inbox --priority P2
 
+# Create a TODO with notes in one call (--file is the encoding-safe path)
+node backend/cli.js todo create --name "my-task" --summary "Do the thing" --field notes --file tmp/notes.md
+
 # Update fields
 node backend/cli.js todo update my-task --status active --priority P1
 
 # Update notes via stdin
 echo "Made progress on X" | node backend/cli.js todo update my-task --field notes --stdin
 
-# Archive a completed TODO
+# Blank the notes deliberately (empty --file/--stdin content is an error, not a wipe)
+node backend/cli.js todo update my-task --field notes --clear
+
+# Archive a completed TODO (--summary-text is required)
 node backend/cli.js todo archive my-task --summary-text "Done, learned Y"
 
 # Delete a TODO
@@ -188,7 +220,21 @@ node backend/cli.js knowledge get tools/docker/networking.md
 
 # Create or update a knowledge file
 echo "# My topic" | node backend/cli.js knowledge upsert "category/my-topic.md" --topic my-topic --summary "one-line summary" --stdin
+
+# Same, from a UTF-8 file (preferred — no console encoding in the way)
+node backend/cli.js knowledge upsert "category/my-topic.md" --summary "one-line summary" --file tmp/content.md
 ```
+
+`upsert` **requires exactly one content source** — `--file <path>` or `--stdin` — and that
+source must carry non-empty content. It replaces the entry's whole body, so an upsert with
+no content (no source, an empty file, or `--stdin` typed with nothing piped in) would blank
+an existing entry; every one of those is an error (exit 1) instead of a silent wipe.
+Passing both `--file` and `--stdin` is also an error rather than a silent winner.
+Metadata-only edits are not supported: re-send the full body alongside `--topic`/`--summary`.
+
+There is no `--clear` on `knowledge upsert` — blanking a knowledge body destroys the whole
+record, which is a delete rather than an edit. (`todo update --field notes --clear` exists
+because a TODO survives losing its notes.)
 
 ### Maintenance
 
