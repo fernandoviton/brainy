@@ -51,6 +51,19 @@ main {
   border-color: var(--terracotta);
 }
 
+/* Marks where the "All" rollup stops: everything left of the divider is
+   included in All, Archived (to its right) is a separate store. */
+.pill-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 0.15rem 0.35rem;
+  background: var(--border-light);
+}
+
+.pill-archived {
+  font-style: italic;
+}
+
 /* ── Cards ─────────────────────────────────────── */
 #cards {
   display: flex;

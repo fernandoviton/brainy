@@ -8,10 +8,12 @@ var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 var searchEl = document.getElementById('text-search');
 
-var KNOWLEDGE_LIMIT = 500;
+// Knowledge only ever grows — `knowledge upsert` is the only write and there
+// is no delete command — so it takes the unbounded-store cap.
+var KNOWLEDGE_LIMIT = 5000;
 var _deepLinkPath = getDeepLink('knowledge');
 var _items = [];
-var _atLimit = false;
+var _atLimit = 0; // rows returned by the last load IF it came back full, else 0
 var _itemsByPath = {};
 var _detailCache = {};
 var _attachmentCache = {};
@@ -74,7 +76,7 @@ function loadKnowledge() {
       return;
     }
     _items = result.data || [];
-    _atLimit = _items.length >= KNOWLEDGE_LIMIT;
+    _atLimit = _items.length >= KNOWLEDGE_LIMIT ? KNOWLEDGE_LIMIT : 0;
     _itemsByPath = {};
     for (var i = 0; i < _items.length; i++) _itemsByPath[_items[i].path] = _items[i];
     _detailCache = {};
@@ -135,7 +137,11 @@ function renderKnowledge(items) {
   var groups = groupByTopLevel(items);
   var html = '';
   if (_atLimit) {
-    html += '<div class="knowledge-limit-note">Showing first ' + KNOWLEDGE_LIMIT + ' entries.</div>';
+    html += '<div class="limit-warning">' +
+      '<span class="limit-warning-icon" aria-hidden="true">⚠️</span>' +
+      '<span><strong>Incomplete list.</strong> Only the first ' + _atLimit + ' entries' +
+      ' loaded — there are more, and the search box cannot see them. Narrow the filters to trust what you see.</span>' +
+      '</div>';
   }
   for (var g = 0; g < groups.length; g++) {
     var group = groups[g];

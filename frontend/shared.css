@@ -16,6 +16,12 @@
   --shadow:      rgba(44, 36, 24, 0.08);
   --shadow-md:   rgba(44, 36, 24, 0.12);
 
+  /* Alarm palette — warm enough for the paper theme, loud enough to stop you */
+  --warn-bg:     #FDECD2;
+  --warn-border: #E8B45C;
+  --warn-accent: #D1401F;
+  --warn-ink:    #9B2C0A;
+
   --font-display: 'Libre Baskerville', 'Georgia', serif;
   --font-body:    'DM Sans', 'Segoe UI', sans-serif;
 
@@ -50,6 +56,38 @@ body::before {
   background-size: 256px 256px;
   pointer-events: none;
   z-index: 0;
+}
+
+/* ── Truncation warning ──────────────────────── */
+/* Shown when a load came back full, i.e. the list AND the search box are
+   missing rows. It has to read as "do not trust this screen", not as a
+   footnote — hence the alarm colours rather than the muted --ink-light. */
+.limit-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--warn-border);
+  border-left: 4px solid var(--warn-accent);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.45;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.limit-warning-icon {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.limit-warning strong {
+  color: var(--warn-accent);
+  font-weight: 700;
 }
 
 main {

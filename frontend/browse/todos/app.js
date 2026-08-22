@@ -8,9 +8,26 @@ var cardsEl = document.getElementById('cards');
 var statusMsg = document.getElementById('status-msg');
 var searchEl = document.getElementById('text-search');
 
+// Row cap for a single load. Search is client-side over the loaded rows, so a
+// cap smaller than the store hides real matches: at 50 rows an "All" load of a
+// 58-todo store silently dropped the 8 oldest (and rows with a NULL created_at,
+// which Postgres sorts last on a `desc` order) — searching could never find
+// them, while the narrower status filters stayed under the cap and looked fine.
+// If a load ever does hit this cap, say so rather than truncating in silence.
+// Live TODOs are the one store that drains: `todo archive` copies the row into
+// brainy_archive_entries and then deletes it, so this side stays small.
+var TODO_LIMIT = 500;
+
+// The archive is the one TODO store that grows without bound: `todo archive`
+// deletes the live row and keeps the entry forever (no retention policy), so
+// live statuses stay small while this only ever gets longer.
+var ARCHIVE_LIMIT = 5000;
+var SEARCH_FIELDS = ['name', 'summary', 'category'];
+
 var _statusFilter = 'active';
 var _priorityFilter = '';
 var _deepLinkName = getDeepLink('todo');
+var _atLimit = 0; // rows returned by the last load IF it came back full, else 0
 var _todos = [];
 var _rendered = [];
 var _detailCache = {};
@@ -80,20 +97,25 @@ setupFilterGroup('priority-filter', function (val) {
   loadTodos();
 });
 
-function loadTodos() {
-  if (searchEl) searchEl.value = '';
+// Render the loaded rows through the search box, so a reload triggered by a
+// filter switch keeps honouring whatever the user has typed.
+function renderFiltered() {
+  renderTodos(filterItems(_todos, SEARCH_FIELDS, searchEl ? searchEl.value : ''));
+}
 
+function loadTodos() {
   if (_statusFilter === 'archived') {
     var aq = db.from('brainy_archive_entries')
       .select('id, todo_name, completion_date, year_month, summary_text, todo_snapshot, collateral_snapshot')
       .order('completion_date', { ascending: false })
-      .limit(50);
+      .limit(ARCHIVE_LIMIT);
     aq.then(function (result) {
       if (result.error) {
         showStatus('Failed to load: ' + result.error.message, 'status-error');
         return;
       }
       var rows = result.data || [];
+      _atLimit = rows.length >= ARCHIVE_LIMIT ? ARCHIVE_LIMIT : 0;
       _todos = rows.map(function (r) {
         var snap = r.todo_snapshot || {};
         var summary = r.summary_text || '';
@@ -120,13 +142,16 @@ function loadTodos() {
       for (var i = 0; i < _todos.length; i++) {
         _archivedCollateralByName[_todos[i].name] = _todos[i]._collateralSnapshot;
       }
-      renderTodos(_todos);
+      renderFiltered();
       handleDeepLink();
     });
     return;
   }
 
-  var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, scheduled_date, created_at').order('created_at', { ascending: false }).limit(50);
+  // "All" (_statusFilter === '') spans every live status but never the archive
+  // — archived TODOs live in brainy_archive_entries and are only reachable via
+  // the Archived pill.
+  var query = db.from('brainy_todos').select('id, name, status, priority, summary, category, due, scheduled_date, created_at').order('created_at', { ascending: false }).limit(TODO_LIMIT);
   if (_statusFilter) query = query.eq('status', _statusFilter);
   if (_priorityFilter) query = query.eq('priority', _priorityFilter);
 
@@ -136,9 +161,10 @@ function loadTodos() {
       return;
     }
     _todos = result.data || [];
+    _atLimit = _todos.length >= TODO_LIMIT ? TODO_LIMIT : 0;
     _detailCache = {};
     _collateralCache = {};
-    renderTodos(_todos);
+    renderFiltered();
     handleDeepLink();
   });
 }
@@ -165,7 +191,9 @@ function handleDeepLink() {
       var rows = (!result.error && result.data) || [];
       if (!rows.length) return;
       _todos = [rows[0]].concat(_todos);
-      renderTodos(_todos);
+      // Deep links resolve on first load, when the search box is still empty,
+      // so the linked todo is at index 0 of the rendered list.
+      renderFiltered();
       openTodoAt(0);
     });
 }
@@ -188,12 +216,21 @@ function renderTodos(todos) {
   // are positions in THIS array, not in the full _todos list.
   _rendered = todos || [];
 
+  var noun = _statusFilter === 'archived' ? 'archived TODOs' : 'TODOs';
+  var limitNote = _atLimit
+    ? '<div class="limit-warning">' +
+        '<span class="limit-warning-icon" aria-hidden="true">⚠️</span>' +
+      '<span><strong>Incomplete list.</strong> Only the first ' + _atLimit + ' ' + noun +
+      ' loaded — there are more, and the search box cannot see them. Narrow the filters to trust what you see.</span>' +
+      '</div>'
+    : '';
+
   if (!todos || todos.length === 0) {
-    cardsEl.innerHTML = '<div class="empty-state">No TODOs found.</div>';
+    cardsEl.innerHTML = limitNote + '<div class="empty-state">No TODOs found.</div>';
     return;
   }
 
-  var html = '';
+  var html = limitNote;
   for (var i = 0; i < todos.length; i++) {
     var t = todos[i];
     // id matches the URL fragment (#todo=<name>) so cards are native anchor targets

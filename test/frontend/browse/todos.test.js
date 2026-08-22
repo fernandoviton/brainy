@@ -17,9 +17,15 @@ const utilsCode = fs.readFileSync(
 function buildMockQuery(resolveData) {
   const mock = {
     _filters: {},
+    _limit: null,
     select: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
+    // Honour the row cap the way PostgREST does — the caller only ever sees
+    // the first N rows, so a too-small limit silently hides real rows.
+    limit: jest.fn().mockImplementation(function (n) {
+      mock._limit = n;
+      return mock;
+    }),
     eq: jest.fn().mockImplementation(function (col, val) {
       mock._filters[col] = val;
       return mock;
@@ -27,7 +33,9 @@ function buildMockQuery(resolveData) {
     is: jest.fn().mockReturnThis(),
     not: jest.fn().mockReturnThis(),
     then: jest.fn().mockImplementation(function (cb) {
-      cb({ data: resolveData || [], error: null });
+      let rows = resolveData || [];
+      if (mock._limit !== null) rows = rows.slice(0, mock._limit);
+      cb({ data: rows, error: null });
       return Promise.resolve();
     }),
   };
@@ -819,5 +827,353 @@ describe('logout', () => {
     dom.listeners['logout-btn:click'][0]();
 
     expect(mockAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+});
+
+// ── Step 8: Search covers the whole result set, All excludes archived, ──
+//           and switching filters preserves the search box ──────────────
+
+/**
+ * Loader for filter-switching tests: every brainy_todos call gets a FRESH
+ * query mock (loadApp's helper reuses one and treats later calls as detail
+ * fetches, which breaks when a pill click re-runs loadTodos).
+ */
+function loadAppForFilters(liveRows, archiveRows, opts) {
+  const liveQueries = [];
+  const archiveQueries = [];
+  const mockFrom = jest.fn(function (table) {
+    if (table === 'brainy_archive_entries') {
+      const q = buildMockQuery(archiveRows || []);
+      archiveQueries.push(q);
+      return q;
+    }
+    if (table === 'brainy_todo_collateral') return buildMockQuery([]);
+    const q = buildMockQuery(liveRows || []);
+    liveQueries.push(q);
+    return q;
+  });
+  let authCallback;
+  const mockAuth = {
+    onAuthStateChange: jest.fn((cb) => { authCallback = cb; }),
+    signInWithOAuth: jest.fn(),
+    signOut: jest.fn().mockResolvedValue({}),
+  };
+  const mockCreateClient = jest.fn().mockReturnValue({
+    auth: mockAuth,
+    from: mockFrom,
+    storage: { from: jest.fn().mockReturnValue({ createSignedUrl: jest.fn().mockResolvedValue({ data: null }) }) },
+  });
+  const dom = buildMockDOM();
+  const ctx = {
+    CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
+    supabase: { createClient: mockCreateClient },
+    document: dom,
+    window: {
+      location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: (opts && opts.hash) || '' },
+      history: { replaceState: jest.fn() },
+    },
+    console: { error: jest.fn() },
+    parseInt: parseInt,
+    marked: { parse: jest.fn((t) => '<p>' + t + '</p>') },
+    DOMPurify: { sanitize: jest.fn((h) => h) },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(utilsCode, ctx);
+  vm.runInContext(appCode, ctx);
+
+  return {
+    ctx, dom, mockFrom, liveQueries, archiveQueries, authCallback,
+    lastLiveQuery: () => liveQueries[liveQueries.length - 1],
+    signIn: async () => { authCallback('SIGNED_IN', { user: { id: '123' } }); await flushPromises(); },
+    clickStatus: async (value) => {
+      const handler = dom.listeners['status-filter:click'][0];
+      const pill = {
+        classList: { contains: jest.fn((c) => c === 'pill'), remove: jest.fn(), add: jest.fn() },
+        getAttribute: jest.fn(() => value),
+      };
+      dom.elements['status-filter'].querySelectorAll = jest.fn(() => [pill]);
+      handler({ target: pill });
+      await flushPromises();
+    },
+    type: async (text) => {
+      dom.elements['text-search'].value = text;
+      dom.listeners['text-search:input'][0]();
+      await flushPromises();
+    },
+    cardsHtml: () => dom.elements['cards'].innerHTML,
+  };
+}
+
+/**
+ * Build a realistic oversized store: `count` todos of mixed status, with the
+ * search target LAST. The real row that exposed this bug
+ * (margin-account-signing) has a NULL created_at, and Postgres sorts NULLs
+ * last on a `created_at desc` order — so it sits at the very bottom of the
+ * unfiltered result set and is the first row a row cap drops.
+ */
+function makeOversizedStore(count, targetName) {
+  const statuses = ['active', 'inbox', 'later', 'scheduled'];
+  const rows = [];
+  for (let i = 0; i < count - 1; i++) {
+    const status = statuses[i % statuses.length];
+    rows.push({
+      id: 'uuid-' + i,
+      name: 'filler-todo-' + i,
+      status: status,
+      priority: 'P2',
+      summary: 'Filler summary ' + i,
+      category: 'misc',
+      due: null,
+      scheduled_date: status === 'scheduled' ? '2026-09-01' : null,
+      created_at: '2026-0' + (1 + (i % 8)) + '-01T10:00:00Z',
+    });
+  }
+  rows.push({
+    id: 'uuid-target',
+    name: targetName,
+    status: 'active',
+    priority: 'P2',
+    summary: 'Get margin paperwork signed for the UTMA at the Bellevue branch',
+    category: 'finance',
+    due: null,
+    scheduled_date: null,
+    created_at: null,
+  });
+  return rows;
+}
+
+describe('browse todos - search reaches past the first page of rows', () => {
+  // 58 live todos is the real store size that surfaced this.
+  const store = makeOversizedStore(58, 'margin-account-signing');
+  const activeOnly = store.filter((t) => t.status === 'active');
+
+  test('REPRO: under All, a todo past row 50 is still findable by search', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.clickStatus(''); // "All"
+
+    await env.type('margin-account');
+
+    expect(env.cardsHtml()).toContain('margin-account-signing');
+  });
+
+  test('the same search under Active finds it (why the bug looked filter-specific)', async () => {
+    const env = loadAppForFilters(activeOnly);
+    await env.signIn(); // default filter is already active
+
+    await env.type('margin-account');
+
+    expect(env.cardsHtml()).toContain('margin-account-signing');
+  });
+
+  test('the live query is not capped at 50 rows', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+
+    expect(env.lastLiveQuery()._limit).toBeGreaterThanOrEqual(500);
+  });
+
+  test('a truncated result set says so instead of silently hiding rows', async () => {
+    const env = loadAppForFilters(makeOversizedStore(600, 'margin-account-signing'));
+    await env.signIn();
+
+    expect(env.cardsHtml()).toContain('limit-warning');
+  });
+
+  test('an untruncated result set shows no limit note', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+
+    expect(env.cardsHtml()).not.toContain('limit-warning');
+  });
+
+  test('the truncation notice leads with a warning emoji', async () => {
+    const env = loadAppForFilters(makeOversizedStore(600, 'margin-account-signing'));
+    await env.signIn();
+
+    expect(env.cardsHtml()).toContain('⚠');
+  });
+
+  test('the truncation notice says outright that the list is incomplete', async () => {
+    // While this is up the user cannot trust the list OR the search box, so
+    // the wording has to say so rather than politely note a row count.
+    const env = loadAppForFilters(makeOversizedStore(600, 'margin-account-signing'));
+    await env.signIn();
+
+    expect(env.cardsHtml().toLowerCase()).toContain('incomplete');
+  });
+
+  test('the archived view gets its own, much larger cap', async () => {
+    // Archive is the one store that grows without bound — every completed
+    // TODO lands there forever, while live statuses get archived off.
+    const env = loadAppForFilters(store, []);
+    await env.signIn();
+    await env.clickStatus('archived');
+
+    expect(env.archiveQueries[0]._limit).toBeGreaterThanOrEqual(5000);
+  });
+
+  test('the truncation notice is styled as a warning banner, not a footnote', () => {
+    const shared = fs.readFileSync(
+      path.join(__dirname, '../../../frontend/shared.css'),
+      'utf8'
+    );
+    const rule = shared.slice(shared.indexOf('.limit-warning'));
+    expect(rule).toContain('.limit-warning');
+    expect(rule.slice(0, 400)).toMatch(/background/);
+    expect(rule.slice(0, 400)).toMatch(/font-weight/);
+  });
+});
+
+describe('browse todos - All excludes archived', () => {
+  const store = makeOversizedStore(6, 'margin-account-signing');
+
+  test('All queries only brainy_todos, never the archive table', async () => {
+    const env = loadAppForFilters(store, [{
+      id: 'a1', todo_name: 'old-task', completion_date: '2026-04-01',
+      year_month: '2026_04', summary_text: 'Done.', todo_snapshot: {}, collateral_snapshot: null,
+    }]);
+    await env.signIn();
+    await env.clickStatus('');
+
+    expect(env.mockFrom).not.toHaveBeenCalledWith('brainy_archive_entries');
+  });
+
+  test('searching under All does not match an archived todo', async () => {
+    const env = loadAppForFilters(store, [{
+      id: 'a1', todo_name: 'archived-margin-thing', completion_date: '2026-04-01',
+      year_month: '2026_04', summary_text: 'Done.', todo_snapshot: {}, collateral_snapshot: null,
+    }]);
+    await env.signIn();
+    await env.clickStatus('');
+    await env.type('margin');
+
+    expect(env.cardsHtml()).toContain('margin-account-signing');
+    expect(env.cardsHtml()).not.toContain('archived-margin-thing');
+  });
+});
+
+describe('browse todos - status pill markup', () => {
+  const indexHtml = fs.readFileSync(
+    path.join(__dirname, '../../../frontend/browse/todos/index.html'),
+    'utf8'
+  );
+  const groupStart = indexHtml.indexOf('id="status-filter"');
+  const statusGroup = indexHtml.slice(groupStart, indexHtml.indexOf('</div>', groupStart));
+
+  test('Archived is separated from the statuses All covers', () => {
+    // The divider must sit between the last "All"-covered status and Archived,
+    // so the row reads: All | Inbox Active Later Scheduled || Archived
+    expect(statusGroup).toContain('pill-divider');
+    expect(statusGroup.indexOf('pill-divider')).toBeGreaterThan(statusGroup.indexOf('data-value="scheduled"'));
+    expect(statusGroup.indexOf('pill-divider')).toBeLessThan(statusGroup.indexOf('data-value="archived"'));
+  });
+
+  test('the divider is not itself clickable as a pill', () => {
+    // setupFilterGroup dispatches on classList.contains('pill') and collects
+    // pills with querySelectorAll('.pill'); a divider carrying that exact
+    // class token would become a selectable, valueless filter.
+    const tag = statusGroup.match(/<[^>]*pill-divider[^>]*>/)[0];
+    const classes = tag.match(/class="([^"]*)"/)[1].split(/\s+/);
+    expect(classes).toContain('pill-divider');
+    expect(classes).not.toContain('pill');
+  });
+
+  test('the Archived pill explains that All does not include it', () => {
+    const at = statusGroup.indexOf('data-value="archived"');
+    const archivedPill = statusGroup.slice(at - 140, at + 200);
+    expect(archivedPill).toContain('pill-archived');
+    expect(archivedPill).toMatch(/title="[^"]+"/);
+  });
+
+  test('the divider is styled as a separator', () => {
+    const css = fs.readFileSync(
+      path.join(__dirname, '../../../frontend/browse/todos/app.css'),
+      'utf8'
+    );
+    expect(css).toContain('.pill-divider');
+  });
+});
+
+describe('browse todos - switching filters keeps the search text', () => {
+  const store = makeOversizedStore(58, 'margin-account-signing');
+
+  test('switching status does not clear the search box', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    await env.clickStatus('');
+
+    expect(env.dom.elements['text-search'].value).toBe('margin-account');
+  });
+
+  test('switching priority does not clear the search box', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    const handler = env.dom.listeners['priority-filter:click'][0];
+    const pill = {
+      classList: { contains: jest.fn((c) => c === 'pill'), remove: jest.fn(), add: jest.fn() },
+      getAttribute: jest.fn(() => 'P2'),
+    };
+    env.dom.elements['priority-filter'].querySelectorAll = jest.fn(() => [pill]);
+    handler({ target: pill });
+    await flushPromises();
+
+    expect(env.dom.elements['text-search'].value).toBe('margin-account');
+  });
+
+  test('the reloaded rows are re-filtered by the surviving search text', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+
+    await env.clickStatus('');
+
+    expect(env.cardsHtml()).toContain('margin-account-signing');
+    expect(env.cardsHtml()).not.toContain('filler-todo-0');
+  });
+
+  test('switching to Archived re-applies the search text to archived rows', async () => {
+    const env = loadAppForFilters(store, [
+      {
+        id: 'a1', todo_name: 'margin-paperwork-2025', completion_date: '2026-04-01',
+        year_month: '2026_04', summary_text: 'Signed.', todo_snapshot: {}, collateral_snapshot: null,
+      },
+      {
+        id: 'a2', todo_name: 'unrelated-old-task', completion_date: '2026-03-01',
+        year_month: '2026_03', summary_text: 'Done.', todo_snapshot: {}, collateral_snapshot: null,
+      },
+    ]);
+    await env.signIn();
+    await env.type('margin');
+
+    await env.clickStatus('archived');
+
+    expect(env.cardsHtml()).toContain('margin-paperwork-2025');
+    expect(env.cardsHtml()).not.toContain('unrelated-old-task');
+  });
+
+  test('an empty search box after a filter switch renders everything loaded', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+
+    await env.clickStatus('');
+
+    expect(env.cardsHtml()).toContain('filler-todo-0');
+    expect(env.cardsHtml()).toContain('margin-account-signing');
+  });
+
+  test('clearing the search box after a filter switch restores the full list', async () => {
+    const env = loadAppForFilters(store);
+    await env.signIn();
+    await env.type('margin-account');
+    await env.clickStatus('');
+
+    await env.type('');
+
+    expect(env.cardsHtml()).toContain('filler-todo-0');
   });
 });

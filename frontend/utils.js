@@ -25,20 +25,27 @@ function truncate(str, maxLen) {
   return str.substring(0, maxLen) + '\u2026';
 }
 
+// Substring match of `query` against any of `fields`. Exposed separately from
+// setupLiveSearch so a page can re-apply the current search text to a freshly
+// loaded list (e.g. after a filter switch) without duplicating the match rules.
+// eslint-disable-next-line no-unused-vars
+function filterItems(items, fields, query) {
+  var q = (query || '').trim().toLowerCase();
+  items = items || [];
+  if (!q) return items;
+  return items.filter(function (item) {
+    for (var i = 0; i < fields.length; i++) {
+      var v = item[fields[i]];
+      if (v && String(v).toLowerCase().indexOf(q) !== -1) return true;
+    }
+    return false;
+  });
+}
+
 // eslint-disable-next-line no-unused-vars
 function setupLiveSearch(inputEl, getItems, fields, onFiltered) {
   inputEl.addEventListener('input', function () {
-    var q = inputEl.value.trim().toLowerCase();
-    var items = getItems() || [];
-    if (!q) { onFiltered(items); return; }
-    var filtered = items.filter(function (item) {
-      for (var i = 0; i < fields.length; i++) {
-        var v = item[fields[i]];
-        if (v && String(v).toLowerCase().indexOf(q) !== -1) return true;
-      }
-      return false;
-    });
-    onFiltered(filtered);
+    onFiltered(filterItems(getItems(), fields, inputEl.value));
   });
 }
 
