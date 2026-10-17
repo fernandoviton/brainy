@@ -82,6 +82,7 @@ Utilities: `check-integrity`, `promote-scheduled`, `backup`, `job`, `scheduler` 
 - `todo get <name>`
 - `todo create --name <n> --summary <s> [--status <s>] [--priority <p>] [--due <date>] [--field notes --file <path>]`
 - `todo update <name> [--status <s>] [--priority <p>] [--field notes --file <path>|--stdin|--clear]` — at least one field flag is required
+- `todo update <name> --field notes --append --file <path>` — add a section to the end of the notes without re-sending the existing text (use this whenever you're adding, not rewriting)
 - `todo archive <name> --summary-text "<t>" [--completion-date <YYYY-MM-DD>]` — `--summary-text` is **required** (archiving deletes the TODO and keeps only this summary)
 - `capture list [--all]` · `capture get <id>` · `capture process <id>`
 - `knowledge list [--prefix <path>]` · `knowledge get <path>` · `knowledge upsert <path> --stdin [--summary <s>]`

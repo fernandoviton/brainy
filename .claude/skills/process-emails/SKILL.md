@@ -74,7 +74,7 @@ When this skill runs as the `email-triage` scheduled job (the prompt says "auton
 - **Don't ask; decide.**
   - **Dealt with, or no action needed** → label `ai-done`.
   - **Needs the user** → create the TODO yourself (status `inbox`, or `active` if it's time-sensitive). Put a `## Open questions` section in its notes with whatever you can't decide: should they reply, which option, by when. Then label the thread `ai-todo`.
-  - If an open TODO already covers the thread, update that TODO's notes instead of creating a duplicate.
+  - If an open TODO already covers the thread, add to that TODO's notes instead of creating a duplicate. Use `todo update <name> --field notes --append --file tmp/<name>.md` with just the new part.
   - Write notes with the Write tool to `tmp/<name>.md` and pass `--file`. Never use `--stdin`.
 - **Log every label you apply, in batches.** Each CLI call signs in to Supabase, so one call per thread trips its rate limit, and a subject containing `$` gets the whole command denied. So don't log thread by thread. After each page of labels, write the events with the Write tool to `tmp/email-events.json` as a JSON array:
   ```json

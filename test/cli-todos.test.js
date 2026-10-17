@@ -329,3 +329,53 @@ describe('--help on a subaction shows help and does not touch storage', () => {
     expect(output.join('\n')).toContain('node backend/cli.js knowledge <action>');
   });
 });
+
+describe('todo update --field notes --append', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  let dir;
+  let file;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainy-append-'));
+    file = path.join(dir, 'add.md');
+    fs.writeFileSync(file, '## Research (agent, 2026-10-17)\n- finding');
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test('appends to the existing notes without the caller re-sending them', async () => {
+    mockStorage.getTodo.mockResolvedValue({ name: 'trip', notes: 'Original notes — long.\n\n' });
+    mockStorage.updateTodo.mockResolvedValue({ name: 'trip', status: 'active' });
+    const { exitCode } = await runCLI(['todo', 'update', 'trip', '--field', 'notes', '--append', '--file', file]);
+    expect(exitCode).toBe(0);
+    expect(mockStorage.updateTodo).toHaveBeenCalledWith('trip', {
+      notes: 'Original notes — long.\n\n## Research (agent, 2026-10-17)\n- finding',
+    });
+  });
+
+  test('appending to empty notes just sets them', async () => {
+    mockStorage.getTodo.mockResolvedValue({ name: 'trip', notes: null });
+    mockStorage.updateTodo.mockResolvedValue({ name: 'trip', status: 'active' });
+    await runCLI(['todo', 'update', 'trip', '--field', 'notes', '--append', '--file', file]);
+    expect(mockStorage.updateTodo).toHaveBeenCalledWith('trip', { notes: '## Research (agent, 2026-10-17)\n- finding' });
+  });
+
+  test('unknown TODO -> error, no write', async () => {
+    mockStorage.getTodo.mockResolvedValue(null);
+    const { exitCode } = await runCLI(['todo', 'update', 'nope', '--field', 'notes', '--append', '--file', file]);
+    expect(exitCode).toBe(1);
+    expect(mockStorage.updateTodo).not.toHaveBeenCalled();
+  });
+
+  test('--append without a content source is rejected', async () => {
+    const { exitCode } = await runCLI(['todo', 'update', 'trip', '--append']);
+    expect(exitCode).toBe(1);
+    expect(mockStorage.updateTodo).not.toHaveBeenCalled();
+  });
+
+  test('--append with --clear is contradictory', async () => {
+    const { exitCode } = await runCLI(['todo', 'update', 'trip', '--field', 'notes', '--append', '--clear']);
+    expect(exitCode).toBe(1);
+    expect(mockStorage.updateTodo).not.toHaveBeenCalled();
+  });
+});

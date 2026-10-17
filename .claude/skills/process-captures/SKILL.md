@@ -67,7 +67,7 @@ When this skill runs as the `capture-processing` scheduled job (the prompt says 
 2. **Check what exists** before creating anything, so you update rather than duplicate: run `todo list --all --format json`, and `knowledge list` for knowledge.
 3. **Route it yourself:**
    - **Knowledge** → `knowledge upsert` (use `/capture` logic for paths and summaries).
-   - **Action** → create or update a TODO. Anything you can't decide goes in a `## Open questions` section of the TODO's notes. Don't guess at priorities or dates you weren't given; leave the defaults and ask in the open questions.
+   - **Action** → create a TODO, or add to an existing one with `todo update <name> --field notes --append --file tmp/<name>.md` (just the new part). Anything you can't decide goes in a `## Open questions` section of the TODO's notes. Don't guess at priorities or dates you weren't given; leave the defaults and ask in the open questions.
    - **Coding work another agent could do** (a change to a repo, a script, a fix) → create the TODO with a summary that starts with `[agent-ready]`. Its notes get a `## Agent brief`: repo, goal, relevant context from the capture, acceptance criteria, and open questions. The user starts these as coding sessions from chat; don't attempt the code yourself.
    - Write notes and knowledge with the Write tool to `tmp/<name>.md` and pass `--file`. Never use `--stdin`.
 4. **Mark it processed last** (`capture process <id>`), after routing succeeded, so a failed run leaves the capture to retry.

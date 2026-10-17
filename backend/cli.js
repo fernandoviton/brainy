@@ -49,6 +49,7 @@ Actions:
            [--field notes --file <path>]            Set notes from a UTF-8 file (preferred; encoding-safe)
            [--field notes --stdin]                  Pipe notes via stdin (guarded against '?' corruption)
            [--field notes --clear]                  Blank the notes deliberately (empty content is otherwise an error)
+           [--field notes --append --file <path>]   Add to the end of the notes (no need to re-send them)
   delete <name>                                    Delete a TODO
   archive <name> --summary-text <t>                Archive a completed TODO (summary is required —
            [--completion-date <d>]                  it is the only thing that survives archiving)
@@ -230,7 +231,7 @@ const FLAG_SPEC = {
       usage: 'todo create --name <name> --summary <summary> [options]',
     },
     update: {
-      flags: ['name', 'summary', 'status', 'priority', 'category', 'due', 'scheduledDate', 'blockedBy', ...NOTES_FLAGS, 'clear'],
+      flags: ['name', 'summary', 'status', 'priority', 'category', 'due', 'scheduledDate', 'blockedBy', ...NOTES_FLAGS, 'clear', 'append'],
       maxPositional: 3,
       usage: 'todo update <name> --<field> <value> [...]',
     },
@@ -317,6 +318,7 @@ const FLAG_SPEC = {
 const FLAG_ARITY = {
   // boolean
   all: 'boolean',
+  append: 'boolean',
   clear: 'boolean',
   disable: 'boolean',
   enable: 'boolean',
@@ -1084,6 +1086,13 @@ async function main() {
           process.exit(1);
         }
         assertNotesFlags(args, 'todo update', { allowClear: true });
+        if (args.append && (args.clear || (args.file === undefined && args.stdin === undefined))) {
+          console.error(
+            'todo update: --append adds to the notes and needs content: --field notes --append --file <path>.\n' +
+            '(--append with --clear is contradictory.)',
+          );
+          process.exit(1);
+        }
         const changes = {};
         if (args.summary !== undefined) changes.summary = args.summary;
         if (args.status) changes.status = args.status;
@@ -1093,9 +1102,16 @@ async function main() {
         if (args.scheduledDate !== undefined) changes.scheduled_date = args.scheduledDate || null;
         if (args.blockedBy !== undefined) changes.blocked_by = args.blockedBy || null;
         const notes = await readNotesInput(args, 'todo update');
-        if (notes !== undefined) changes.notes = notes;
+        if (notes !== undefined && args.append) {
+          // Append without making the caller re-send (and risk mangling) the existing body.
+          const current = await storage.getTodo(name);
+          if (!current) { console.error(`TODO '${name}' not found`); process.exit(1); }
+          changes.notes = current.notes ? `${current.notes.replace(/\s+$/, '')}\n\n${notes}` : notes;
+        } else if (notes !== undefined) {
+          changes.notes = notes;
+        }
         const result = await storage.updateTodo(name, changes);
-        await audit(storage, 'update', 'todo', name, Object.keys(changes).join(', '));
+        await audit(storage, 'update', 'todo', name, Object.keys(changes).join(', ') + (args.append ? ' (append)' : ''));
         console.log(`Updated: ${result.name} [${result.status}]`);
       } else if (action === 'delete') {
         const name = rest[0] || args.name;

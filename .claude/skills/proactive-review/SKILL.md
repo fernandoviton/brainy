@@ -27,7 +27,7 @@ Suggest status, priority and blocking changes **in the report**. Don't apply the
 ### 3. Research (at most 3 TODOs per run)
 Pick up to three `later`/`active` TODOs where web research would move them forward, such as comparisons, prices, availability, "how do I", or season or schedule lookups. Prefer ones with a clear question in the summary or notes. For each:
 - Research with WebSearch/WebFetch. Cite sources with URLs, and note when they were published or checked.
-- **Append** a section to the TODO's notes. Never replace or reword what's already there. Get the current notes, write `existing notes + new section` with the Write tool to `tmp/<name>.md`, then run `todo update <name> --field notes --file tmp/<name>.md`. The new section looks like this:
+- **Append** a section to the TODO's notes. Never replace or reword what's already there. Write **only the new section** with the Write tool to `tmp/<name>.md`, then run `todo update <name> --field notes --append --file tmp/<name>.md`. The CLI adds it to the end, so you never re-send the existing notes. The new section looks like this:
   ```
   ## Research (agent, YYYY-MM-DD)
   - finding — source URL
