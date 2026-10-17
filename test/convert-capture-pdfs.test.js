@@ -143,3 +143,21 @@ describe('convertAllCapturePdfs', () => {
     expect(result.failed).toBe(1);
   });
 });
+
+describe('venvPythonPath', () => {
+  const path = require('path');
+  const { venvPythonPath } = require('../tools/convert-capture-pdfs');
+  const venvDir = path.join(__dirname, '..', 'tools', '.venv');
+
+  test('Windows venv layout → Scripts/python.exe', () => {
+    expect(venvPythonPath('win32')).toBe(path.join(venvDir, 'Scripts', 'python.exe'));
+  });
+
+  test('Linux venv layout → bin/python', () => {
+    expect(venvPythonPath('linux')).toBe(path.join(venvDir, 'bin', 'python'));
+  });
+
+  test('macOS venv layout → bin/python', () => {
+    expect(venvPythonPath('darwin')).toBe(path.join(venvDir, 'bin', 'python'));
+  });
+});

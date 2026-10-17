@@ -1,11 +1,13 @@
 /**
- * One-time Google OAuth login flow for CLI.
+ * Google OAuth login for the CLI. Use it for first-time setup and to re-authenticate
+ * after an "Invalid Refresh Token" error.
  *
- * 1. Open http://localhost:3000 in your browser
+ * 1. Starts a local server on http://localhost:3000 and opens it in your browser
  * 2. Sign in with Google
  * 3. The SUPABASE_REFRESH_TOKEN is written back to .env automatically
  *
- * Based on explore-supabase/js/02-auth-google.js
+ * The browser must run on the same machine (it redirects to localhost:3000). On a
+ * remote machine, use its desktop or an SSH tunnel; see FIRST-TIME-SETUP.md.
  */
 const fs = require('fs');
 const http = require('http');
@@ -13,6 +15,7 @@ const path = require('path');
 const ENV_PATH = path.join(__dirname, '../.env');
 require('dotenv').config({ path: ENV_PATH });
 const { createClient } = require('@supabase/supabase-js');
+const { openBrowser } = require('./open-browser');
 
 const { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
@@ -114,7 +117,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Open http://localhost:${PORT} in your browser to start Google OAuth flow`);
+  const url = `http://localhost:${PORT}`;
+  console.log(`Opening ${url} to start the Google OAuth flow...`);
   console.log('Prereq: enable Google provider in Supabase dashboard');
   console.log(`Prereq: add ${CALLBACK_URL} as a redirect URL in Authentication > URL Configuration`);
+  openBrowser(url);
 });

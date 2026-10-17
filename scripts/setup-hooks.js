@@ -25,6 +25,12 @@ function parseArgs(argv) {
   return args;
 }
 
+// Hooks are plain Node scripts invoked as `node "<abs path>"`, so one command
+// works on Windows, macOS and Linux without a .bat or shell wrapper.
+function hookCommand(repoRootForwardSlash, script) {
+  return `node "${repoRootForwardSlash}/.claude/hooks/${script}"`;
+}
+
 function buildExpectedHooks(repoRootForwardSlash) {
   return {
     SessionStart: [
@@ -32,8 +38,13 @@ function buildExpectedHooks(repoRootForwardSlash) {
         hooks: [
           {
             type: 'command',
-            command: `${repoRootForwardSlash}/.claude/hooks/run_promote_scheduled.bat`,
+            command: hookCommand(repoRootForwardSlash, 'run_promote_scheduled.js'),
             timeout: 10,
+          },
+          {
+            type: 'command',
+            command: hookCommand(repoRootForwardSlash, 'run_backup.js'),
+            timeout: 120,
           },
         ],
       },
@@ -44,7 +55,7 @@ function buildExpectedHooks(repoRootForwardSlash) {
         hooks: [
           {
             type: 'command',
-            command: `${repoRootForwardSlash}/.claude/hooks/stop_check.bat`,
+            command: hookCommand(repoRootForwardSlash, 'stop_check.js'),
             timeout: 10,
           },
         ],

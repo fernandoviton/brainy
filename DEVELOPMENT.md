@@ -23,7 +23,7 @@ The `frontend/` directory is a **static site** — no build step and no backend 
 To test working-tree changes, serve `frontend/` over HTTP (opening the files as `file://` breaks the relative `../../config.local.js` script paths and Supabase auth):
 
 ```bash
-cd frontend && python -m http.server 8080 --bind 127.0.0.1
+cd frontend && python -m http.server 8080 --bind 127.0.0.1   # python3 on Linux/macOS
 ```
 
 Then open `http://127.0.0.1:8080/` (browse pages under `/browse/todos/`, `/browse/captures/`, `/browse/knowledge/`). It serves working-tree files directly, so edits show up on a browser refresh — no restart needed.
@@ -38,6 +38,8 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
 - `backend/cli.js` — CLI routing and output formatting. Commands dispatch under `resource === 'todo'` / `'capture'` / `'knowledge'` branches. Argument parsing converts `--kebab-case` flags to camelCase.
 - `backend/capture-service.js` — thin orchestration layer over storage for captures (e.g., joining media to captures). Follow this pattern if a CLI command needs to compose multiple storage calls.
 - `backend/backup.js` — backup engine. `exportBackup()` dumps the whole store to a local folder tree (throttled by `minIntervalDays`); depends on storage only via `exportAll()` + `downloadMedia()` so it's unit-testable with a mock. `.claude/hooks/run_backup.js` runs it on session start. Config lives in `backup.config.json` (gitignored).
+- `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers.
+- `scripts/google-login.js` — CLI Google sign-in; writes `SUPABASE_REFRESH_TOKEN` to `.env`. `scripts/open-browser.js` is its cross-platform browser launcher.
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.
 
 ## Test patterns

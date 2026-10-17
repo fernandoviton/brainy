@@ -4,8 +4,16 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// venv layouts differ: Windows puts the interpreter in Scripts/, everything else in bin/.
+function venvPythonPath(platform = process.platform) {
+  const venvDir = path.join(__dirname, '.venv');
+  return platform === 'win32'
+    ? path.join(venvDir, 'Scripts', 'python.exe')
+    : path.join(venvDir, 'bin', 'python');
+}
+
 function convertPdf(inputPath, outputPath) {
-  const pythonPath = path.join(__dirname, '.venv', 'Scripts', 'python.exe');
+  const pythonPath = venvPythonPath();
   const scriptPath = path.join(__dirname, 'pdf-to-md.py');
   return new Promise((resolve, reject) => {
     execFile(pythonPath, [scriptPath, inputPath, outputPath], (err, stdout, stderr) => {
@@ -82,4 +90,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { convertAllCapturePdfs };
+module.exports = { convertAllCapturePdfs, venvPythonPath };
