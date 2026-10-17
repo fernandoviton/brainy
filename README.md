@@ -15,7 +15,7 @@ All data lives in Supabase (PostgreSQL + Storage) — no local files, works acro
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) (v18+) on Windows, macOS or Linux
 - A [Supabase](https://supabase.com/) project
 
 ### 1. Install dependencies
@@ -48,21 +48,13 @@ Fill in `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from your Supabase project
 
 ### 5. Authenticate
 
-Run the one-time Google login flow:
+Run the Google login flow:
 
 ```bash
 node scripts/google-login.js
 ```
 
-This opens your browser for Google sign-in, then prints a `SUPABASE_REFRESH_TOKEN`. Add it to your `.env` file.
-
-To re-authenticate later (e.g., if the refresh token expires or is revoked - you will see an error like "Invalid Refresh Token"):
-
-```bash
-node scripts/refresh-token.js
-```
-
-This opens your browser, signs you in, and updates `.env` automatically.
+This opens your browser for Google sign-in and writes `SUPABASE_REFRESH_TOKEN` into `.env` automatically. Each machine should sign in separately rather than copying the token. If you see "Invalid Refresh Token" later, re-run the same command. See [`FIRST-TIME-SETUP.md`](FIRST-TIME-SETUP.md#3-authenticate-per-machine) for signing in on a remote machine (VM over VNC, or an SSH tunnel) and for what ends a login.
 
 ### 6. Verify
 
@@ -262,9 +254,9 @@ Use these slash commands when working with Claude:
 
 Brainy includes Claude Code hooks (in `.claude/hooks/`) that run automatically:
 - **SessionStart**: Promotes scheduled TODOs that are due; exports a backup if configured (throttled by `minIntervalDays`, reports via a session message — see [Backups](#7-optional-enable-local-backups))
-- **Stop**: Runs integrity checks after each session
+- **Stop**: Runs integrity checks after each session, and blocks with a re-login reminder if the refresh token has expired
 
-> **Note:** Hooks use `.bat` files (Windows). On other platforms, you'll need to adapt them or replace with equivalent shell scripts.
+The hooks are plain Node scripts, so they work on Windows, macOS and Linux. Register them for your checkout with `node scripts/setup-hooks.js` (see [`FIRST-TIME-SETUP.md`](FIRST-TIME-SETUP.md)).
 
 ## Schema
 
