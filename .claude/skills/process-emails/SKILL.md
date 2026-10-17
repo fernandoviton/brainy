@@ -76,10 +76,11 @@ When this skill runs as the `email-triage` scheduled job (the prompt says "auton
   - **Needs the user** → create the TODO yourself (status `inbox`, or `active` if it's time-sensitive). Put a `## Open questions` section in its notes with whatever you can't decide: should they reply, which option, by when. Then label the thread `ai-todo`.
   - If an open TODO already covers the thread, update that TODO's notes instead of creating a duplicate.
   - Write notes with the Write tool to `tmp/<name>.md` and pass `--file`. Never use `--stdin`.
-- **Log every label you apply.** One event per thread:
-  ```bash
-  node backend/cli.js job log-event --action "label ai-done" --type email --target "<sender>: <subject>" --detail "<human|machine>; <one-line reason>"
+- **Log every label you apply, in batches.** Each CLI call signs in to Supabase, so one call per thread trips its rate limit, and a subject containing `$` gets the whole command denied. So don't log thread by thread. After each page of labels, write the events with the Write tool to `tmp/email-events.json` as a JSON array:
+  ```json
+  [{"action": "label ai-done", "type": "email", "target": "<sender>: <subject>", "detail": "<human|machine>; <one-line reason>"}]
   ```
+  then log them all in **one** call: `node backend/cli.js job log-event --file tmp/email-events.json`. Use the real subject, which you have from `search_threads`.
   The CLI audits TODO and knowledge writes automatically, but it can't see Gmail, so these events are the only reliable record of what you closed.
   Log an event only **after** its `label_thread` call has succeeded. Never log in the same batch as the label call, because a failed label would then leave a false record.
 - **Your final message is the run report** the user reads on the Activity page and in their session digest. Use the step 5 structure, in markdown, starting with a one-line summary (e.g. "Reviewed 23 threads: 2 TODOs, 19 closed, 2 knowledge entries"). The human-sent list is mandatory, and the self-check still applies.

@@ -1133,9 +1133,8 @@ async function uploadRunTranscript(run, filePath) {
 
 // Audit trail: written by the CLI (not the agent) for every write made while
 // BRAINY_RUN_ID is set, so a run's report can be checked against what it did.
-async function recordRunEvent({ runId, jobName, action, targetType, target, detail }) {
-  const userId = await getUserId();
-  const { error } = await supabase.from('brainy_run_events').insert({
+function runEventRow(userId, { runId, jobName, action, targetType, target, detail }) {
+  return {
     user_id: userId,
     run_id: runId,
     job_name: jobName || null,
@@ -1143,7 +1142,20 @@ async function recordRunEvent({ runId, jobName, action, targetType, target, deta
     target_type: targetType,
     target: target || null,
     detail: detail || null,
-  });
+  };
+}
+
+async function recordRunEvent(event) {
+  const userId = await getUserId();
+  const { error } = await supabase.from('brainy_run_events').insert(runEventRow(userId, event));
+  if (error) throw error;
+}
+
+// A batch in one request: an agent logging one event per CLI call can trip
+// the auth rate limit (every CLI process signs in).
+async function recordRunEvents(events) {
+  const userId = await getUserId();
+  const { error } = await supabase.from('brainy_run_events').insert(events.map((e) => runEventRow(userId, e)));
   if (error) throw error;
 }
 
@@ -1252,6 +1264,7 @@ module.exports = {
   markJobSkipped,
   uploadRunTranscript,
   recordRunEvent,
+  recordRunEvents,
   listReports,
   countCycleRuns,
   getSchedulerState,

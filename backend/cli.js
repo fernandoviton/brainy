@@ -103,8 +103,10 @@ Actions:
   reports [--since <iso>] [--job <name>] [--limit <n>]
                                          Agent run reports with their audited actions
   log-event --action <a> --type <t> --target <x> [--detail <d>]
-                                         Inside a job run: record an action the CLI cannot
-                                         see (e.g. a Gmail label). Needs BRAINY_RUN_ID.
+  log-event --file <events.json>         Inside a job run: record actions the CLI cannot see
+                                         (e.g. Gmail labels). --file takes a JSON array of
+                                         {action, type, target, detail?}: one call for a whole
+                                         batch. Needs BRAINY_RUN_ID.
 
 Job options (create / update; an empty value clears the clearable ones):
   --kind command|agent                   command: shell command; agent: \`claude -p\` prompt
@@ -285,9 +287,9 @@ const FLAG_SPEC = {
     runs: { flags: ['limit'], maxPositional: 3, usage: 'job runs [<name>] [--limit <n>]' },
     reports: { flags: ['since', 'job', 'limit'], maxPositional: 2, usage: 'job reports [--since <iso>] [--job <name>] [--limit <n>]' },
     'log-event': {
-      flags: ['action', 'type', 'target', 'detail'],
+      flags: ['action', 'type', 'target', 'detail', 'file'],
       maxPositional: 2,
-      usage: 'job log-event --action <a> --type <t> --target <x> [--detail <d>]',
+      usage: 'job log-event --action <a> --type <t> --target <x> [--detail <d>] | --file <events.json>',
     },
   },
   scheduler: {
@@ -919,8 +921,39 @@ async function handleJob(storage, action, rest, args, format) {
       console.error('job log-event: only valid inside a scheduled job run (BRAINY_RUN_ID is not set).');
       process.exit(1);
     }
+    const runId = process.env.BRAINY_RUN_ID;
+    const jobName = process.env.BRAINY_JOB_NAME || null;
+    if (args.file !== undefined) {
+      if (args.action !== undefined || args.type !== undefined || args.target !== undefined || args.detail !== undefined) {
+        console.error('job log-event: pass either --file or --action/--type/--target, not both.');
+        process.exit(1);
+      }
+      let entries;
+      try {
+        entries = JSON.parse(fs.readFileSync(args.file, 'utf8'));
+      } catch (err) {
+        console.error(`job log-event: --file ${args.file} is not readable JSON — ${err.message}`);
+        process.exit(1);
+      }
+      if (!Array.isArray(entries) || !entries.length) {
+        console.error('job log-event: --file must contain a non-empty JSON array of {action, type, target, detail?}');
+        process.exit(1);
+      }
+      const bad = entries
+        .map((e, i) => (e && e.action && e.type && e.target ? null : i + 1))
+        .filter(Boolean);
+      if (bad.length) {
+        console.error(`job log-event: entry ${bad.join(', ')} is missing action, type or target — nothing was logged.`);
+        process.exit(1);
+      }
+      await storage.recordRunEvents(entries.map((e) => ({
+        runId, jobName, action: e.action, targetType: e.type, target: e.target, detail: e.detail || null,
+      })));
+      console.log(`Logged ${entries.length} events`);
+      return;
+    }
     if (!args.action || !args.type || !args.target) {
-      console.error('Usage: job log-event --action <a> --type <t> --target <x> [--detail <d>]');
+      console.error('Usage: job log-event --action <a> --type <t> --target <x> [--detail <d>] | --file <events.json>');
       process.exit(1);
     }
     await storage.recordRunEvent({

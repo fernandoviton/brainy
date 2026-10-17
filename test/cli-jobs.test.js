@@ -47,6 +47,7 @@ const mockStorage = {
   markJobSkipped: jest.fn(),
   uploadRunTranscript: jest.fn(),
   recordRunEvent: jest.fn(),
+  recordRunEvents: jest.fn(),
   listReports: jest.fn(),
 };
 
@@ -442,6 +443,44 @@ describe('audit trail during job runs', () => {
       runId: 'run-9', jobName: 'email-triage', action: 'label ai-done', targetType: 'email',
       target: 'Jane Doe: dinner Sat?', detail: 'human-sent; replied already',
     });
+  });
+
+  test('job log-event --file logs a whole batch in one call (no shell quoting, one auth)', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    process.env.BRAINY_JOB_NAME = 'email-triage';
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainy-events-'));
+    const file = path.join(dir, 'events.json');
+    fs.writeFileSync(file, JSON.stringify([
+      { action: 'label ai-done', type: 'email', target: 'shop: Your $5 is waiting', detail: 'machine; promo' },
+      { action: 'label ai-todo', type: 'email', target: 'GitHub: invite' },
+    ]));
+    mockStorage.recordRunEvents.mockResolvedValue();
+    const { exitCode, output } = await runCLI(['job', 'log-event', '--file', file]);
+    expect(exitCode).toBe(0);
+    expect(mockStorage.recordRunEvents).toHaveBeenCalledWith([
+      { runId: 'run-9', jobName: 'email-triage', action: 'label ai-done', targetType: 'email', target: 'shop: Your $5 is waiting', detail: 'machine; promo' },
+      { runId: 'run-9', jobName: 'email-triage', action: 'label ai-todo', targetType: 'email', target: 'GitHub: invite', detail: null },
+    ]);
+    expect(output.join('\n')).toContain('Logged 2 events');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('job log-event --file rejects malformed entries before writing anything', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainy-events-'));
+    const file = path.join(dir, 'events.json');
+    fs.writeFileSync(file, JSON.stringify([{ action: 'label ai-done', type: 'email', target: 'ok' }, { action: 'x' }]));
+    const { exitCode, errors } = await runCLI(['job', 'log-event', '--file', file]);
+    expect(exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/entry 2.*type.*target/);
+    expect(mockStorage.recordRunEvents).not.toHaveBeenCalled();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('job log-event --file with inline flags is ambiguous', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    const { exitCode } = await runCLI(['job', 'log-event', '--file', 'x.json', '--action', 'y']);
+    expect(exitCode).toBe(1);
   });
 
   test('job log-event outside a run is an error', async () => {

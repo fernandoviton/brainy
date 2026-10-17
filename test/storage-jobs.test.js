@@ -191,6 +191,19 @@ describe('precheck skip, transcripts, events, reports', () => {
     });
   });
 
+  test('recordRunEvents inserts a batch in one request', async () => {
+    const chains = script(ok(null));
+    await storage.recordRunEvents([
+      { runId: 'r', jobName: 'j', action: 'a', targetType: 'email', target: 't1', detail: null },
+      { runId: 'r', jobName: 'j', action: 'a', targetType: 'email', target: 't2', detail: 'd' },
+    ]);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].insert.mock.calls[0][0]).toHaveLength(2);
+    expect(chains[0].insert.mock.calls[0][0][1]).toEqual({
+      user_id: 'test-user-id', run_id: 'r', job_name: 'j', action: 'a', target_type: 'email', target: 't2', detail: 'd',
+    });
+  });
+
   test('listReports returns runs that have a report, newest first, with their events', async () => {
     const chains = script(
       ok([{ id: 'r1', job_name: 'triage', report: 'x', started_at: '2026-10-17T10:00:00Z' }]),

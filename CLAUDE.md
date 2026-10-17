@@ -108,6 +108,8 @@ Jobs (shell commands or headless `claude -p` agent runs) are stored in Supabase 
 - **Rules for a scheduled job run.** When your prompt says "autonomous mode" or "scheduled job", Bash is limited to an allowlist of exact command prefixes, and nobody is around to approve anything else:
   - Write files with the **Write tool** (under `tmp/`), never shell heredocs or `cat >`.
   - Run **one CLI command per Bash call**: no `&&`, `;`, pipes (`| head`), `$(...)` or variables. Each of those gets the whole call denied.
+  - Never put free text (an email subject, a title) inside a command. A `$` or a backtick in it gets the call denied. Put it in a file with the Write tool instead, e.g. `job log-event --file`.
+  - Batch your CLI writes where a batch form exists. Every CLI call signs in to Supabase, and dozens of calls in a few minutes hit its rate limit.
   - Remove your temp files with `rm -f tmp/<file>`.
   - If a tool fails with an auth or permission error (e.g. `Insufficient scope`), **stop using that tool** after the first failure, finish what you can, and lead the report with the error and the fix it needs.
 - **Starvation:** a job is starved when it hasn't *succeeded* within twice its cron gap, or within 2 weeks for capacity jobs (override with `--starvation-hours`). Mention starved jobs when they appear in `job list` / `scheduler status`.
