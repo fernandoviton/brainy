@@ -30,8 +30,11 @@ function buildChain() {
     in: jest.fn().mockReturnThis(),
     like: jest.fn().mockReturnThis(),
     lte: jest.fn().mockReturnThis(),
+    gte: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
     single: jest.fn(() => Promise.resolve(_mockResult)),
+    maybeSingle: jest.fn(() => Promise.resolve(_mockResult)),
   };
 
   // Make the chain thenable so `await query` works

@@ -1,0 +1,163 @@
+main {
+  max-width: 720px;
+}
+
+/* ── Scheduler health ─────────────────────────── */
+#tick-panel {
+  margin-bottom: 1.25rem;
+}
+
+.tick-line {
+  font-size: 0.85rem;
+  color: var(--ink-light);
+  margin-bottom: 0.25rem;
+}
+
+.tick-error {
+  color: var(--warn-ink);
+}
+
+/* ── Cards ─────────────────────────────────────── */
+#cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.card {
+  background: var(--paper-white);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 1px 4px var(--shadow);
+  animation: fadeUp 0.3s var(--ease-out) both;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.card-header::-webkit-details-marker {
+  display: none;
+}
+
+.card-header::before {
+  content: '\25B6';
+  font-size: 0.6rem;
+  color: var(--ink-light);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.job-card[open] > .card-header::before {
+  transform: rotate(90deg);
+}
+
+.job-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.25rem;
+}
+
+.card-summary {
+  font-size: 0.86rem;
+  color: var(--ink-light);
+  line-height: 1.5;
+  margin-bottom: 0.3rem;
+}
+
+.card-meta {
+  font-size: 0.75rem;
+  color: var(--sage);
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.requested {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+
+.card-detail {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.job-description {
+  font-size: 0.86rem;
+  margin-bottom: 0.5rem;
+}
+
+code,
+.job-payload,
+.run-output {
+  font-family: 'Courier New', monospace;
+}
+
+.job-payload,
+.run-output {
+  background: rgba(107, 93, 79, 0.06);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin-bottom: 0.6rem;
+}
+
+/* ── Badges ────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--cream-dark);
+  color: var(--ink-light);
+}
+
+.badge-succeeded { background: var(--sage-light); color: var(--paper-white); }
+.badge-failed,
+.badge-timed_out,
+.badge-starved { background: var(--warn-accent); color: var(--paper-white); }
+.badge-abandoned { background: var(--warn-bg); color: var(--warn-ink); }
+.badge-running { background: var(--terra-glow); color: var(--paper-white); }
+.badge-disabled { background: var(--border); color: var(--ink); }
+
+/* ── Runs ──────────────────────────────────────── */
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.run summary {
+  font-size: 0.8rem;
+  color: var(--ink-light);
+  cursor: pointer;
+}
+
+.run .run-output {
+  margin-top: 0.4rem;
+}
+
+.detail-empty,
+.empty-state {
+  font-size: 0.85rem;
+  color: var(--sage);
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+}

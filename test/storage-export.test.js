@@ -32,6 +32,7 @@ describe('exportAll', () => {
       brainy_archive_summaries: [{ year_month: '2026_01', content: '# Archive' }],
       brainy_captures: [{ id: 'c1', text: 'note' }],
       brainy_capture_media: [{ capture_id: 'c1', filename: 'p.png', storage_path: 'u/c/p.png' }],
+      brainy_scheduled_jobs: [{ id: 'j1', name: 'nightly-backup', trigger: 'schedule' }],
     };
 
     mockSupabase.supabase.from.mockImplementation((table) =>
@@ -48,6 +49,7 @@ describe('exportAll', () => {
     expect(result.archiveSummaries).toEqual(byTable.brainy_archive_summaries);
     expect(result.captures).toEqual(byTable.brainy_captures);
     expect(result.captureMedia).toEqual(byTable.brainy_capture_media);
+    expect(result.scheduledJobs).toEqual(byTable.brainy_scheduled_jobs);
   });
 
   test('scopes every query to the authenticated user', async () => {

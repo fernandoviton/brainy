@@ -99,6 +99,22 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 └──────────────────────────┘
 ```
 
+### Scheduler tables
+
+Design: `docs/scheduler-architecture.md`.
+
+**`brainy_scheduled_jobs`**: one row per job. `UQ(user_id, name)`.
+- Definition: `id` PK, `user_id`, `name`, `description`, `enabled`, `kind` {command, agent}, `command` / `prompt` (CHK: the one matching `kind` is required), `workdir`, `model`, `permission_mode`, `timeout_minutes`, `priority` {P0..P3}, `starvation_hours`
+- Trigger: `trigger` {schedule, capacity}, `cron` (CHK: required for schedule), and the capacity gates `window_hours`, `max_weekly_pct`, `max_session_pct`, `runs_per_cycle`
+- Bookkeeping (written by the tick): `run_requested_at`, `last_run_at`, `last_finished_at`, `last_status`, `last_success_at`, `next_run_at`
+
+**`brainy_job_runs`**: one row per run. `job_id` FK → `brainy_scheduled_jobs` (cascade).
+- `job_name`, `reason` {schedule, capacity, requested}, `status` {running, succeeded, failed, timed_out, abandoned}
+- `started_at`, `finished_at`, `exit_code`, `output_tail` (last 4,000 chars), `host`, `pid`, `usage_before` / `usage_after` (jsonb)
+
+**`brainy_scheduler_state`**: one row per user (`user_id` PK), overwritten every tick.
+- `last_tick_at`, `host`, `usage` (jsonb, the latest plan usage reading), `usage_error`, `waiting` (jsonb: why each job is waiting), `starved` (jsonb)
+
 ## Relationships Summary
 
 | Parent                  | Child                            | FK Column      | On Delete |
@@ -114,6 +130,10 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 | `auth.users`            | `brainy_captures`                | `user_id`      | —         |
 | `auth.users`            | `brainy_capture_media`           | `user_id`      | —         |
 | `brainy_captures`       | `brainy_capture_media`           | `capture_id`   | CASCADE   |
+| `auth.users`            | `brainy_scheduled_jobs`          | `user_id`      | —         |
+| `auth.users`            | `brainy_job_runs`                | `user_id`      | —         |
+| `auth.users`            | `brainy_scheduler_state`         | `user_id` (PK) | —         |
+| `brainy_scheduled_jobs` | `brainy_job_runs`                | `job_id`       | CASCADE   |
 
 *Note: `brainy_goals` was intentionally removed — goals are not tracked in the database.*
 
@@ -128,6 +148,9 @@ Every table has RLS enabled — users can only access their own rows (`auth.uid(
 | `brainy_knowledge_attachments` | `idx_brainy_knowledge_attachments_knowledge` | `(knowledge_id)` |
 | `brainy_captures` | `idx_brainy_captures_user_processed` | `(user_id, processed_at)` |
 | `brainy_capture_media` | `idx_brainy_capture_media_capture` | `(capture_id)` |
+| `brainy_job_runs` | `idx_brainy_job_runs_job_started` | `(job_id, started_at desc)` |
+| `brainy_job_runs` | `idx_brainy_job_runs_user_started` | `(user_id, started_at desc)` |
+| `brainy_job_runs` | `idx_brainy_job_runs_running` | `(user_id)` WHERE status='running' |
 | `brainy_archive_entries` | `idx_brainy_archive_entries_user_month` | `(user_id, year_month)` |
 
 ## Triggers

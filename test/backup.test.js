@@ -211,6 +211,21 @@ describe('exportBackup — file tree', () => {
     expect(written).toContain('Step 2: trigger');
   });
 
+  test('writes job definitions to jobs/<name>.json without run bookkeeping', async () => {
+    const targetPath = tmpTarget();
+    const storage = fakeStore({
+      scheduledJobs: [{
+        id: 'j1', name: 'nightly-backup', trigger: 'schedule', cron: '0 3 * * *',
+        last_run_at: 'x', last_finished_at: 'x', last_status: 'succeeded', last_success_at: 'x',
+        next_run_at: 'x', run_requested_at: 'x', updated_at: 'x',
+      }],
+    });
+    await callExport({ storage, targetPath, force: true });
+    const written = JSON.parse(fs.readFileSync(path.join(targetPath, 'jobs', 'nightly-backup.json'), 'utf8'));
+    // Volatile fields change on every run and would make every backup a diff.
+    expect(written).toEqual({ id: 'j1', name: 'nightly-backup', trigger: 'schedule', cron: '0 3 * * *' });
+  });
+
   test('downloads binary files to files/<storage_path>', async () => {
     const targetPath = tmpTarget();
     const storage = fakeStore({

@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { getStorage } = require('./storage');
 const captureService = require('./capture-service');
+const jobCommands = require('./job-commands');
 
 const HELP = {
   main: `Usage: node backend/cli.js <resource> [action] [options]
@@ -18,6 +19,8 @@ Resources:
   check-integrity      Run data integrity checks
   promote-scheduled    Promote scheduled TODOs whose date has arrived
   backup               Export the whole store to a local folder [--target <p>] [--force] [--config <p>]
+  job                  Manage scheduled jobs (list, get, create, update, delete, run, runs)
+  scheduler            Run one scheduler tick, or show what it would do (tick, status)
 
 Run "node backend/cli.js <resource> help" for details on each resource.
 All commands support --format json|text (text is the default human output).
@@ -82,6 +85,48 @@ Actions:
 upsert REQUIRES exactly one content source (--file or --stdin), and that source must
 carry non-empty content: upsert replaces the whole body, so an empty (or missing)
 content source would blank an existing entry.`,
+
+  job: `Usage: node backend/cli.js job <action> [options]
+
+Actions:
+  list                                   List jobs with trigger, last run, next run / starvation
+  get <name>                             Full job details
+  create --name <n> --kind command|agent --trigger schedule|capacity [options]
+  update <name> [options] [--enable|--disable]
+  delete <name>
+  run <name> | --trigger <t> | --all [--now]
+                                         Queue a run for the next tick, bypassing schedule and
+                                         capacity checks. --now also starts the tick immediately
+                                         (on the scheduler host).
+  runs [<name>] [--limit <n>]            Recent runs (default 20)
+
+Job options (create / update; an empty value clears the clearable ones):
+  --kind command|agent                   command: shell command; agent: \`claude -p\` prompt
+  --command <cmd>                        Shell command (command jobs; runs via bash -lc)
+  --prompt <text> | --file <path>        Agent prompt (agent jobs; --file is encoding-safe)
+  --trigger schedule|capacity            schedule: every cron fire; capacity: spare usage only
+  --cron <expr>                          5-field cron in the host's local time (schedule jobs)
+  --description <text>                   What the job is for
+  --priority P0-P3                       Capacity jobs: higher priority runs first (default P2)
+  --workdir <path>                       Working directory (default: the Brainy checkout)
+  --model <m>                            Agent jobs: --model passed to claude
+  --permission-mode <m>                  Agent jobs: default|acceptEdits|plan|bypassPermissions
+  --timeout-minutes <n>                  Kill the run after n minutes (default 30)
+  --window-hours <n>                     Capacity: only in the last n hours of the weekly cycle (24)
+  --max-weekly-pct <n>                   Capacity: only while weekly usage is below n% (80)
+  --max-session-pct <n>                  Capacity: only while 5-hour usage is below n% (50)
+  --runs-per-cycle <n>                   Capacity: at most n runs per weekly cycle (1)
+  --starvation-hours <n>                 Flag as starved after n hours without a success
+                                         (default: 2x the cron gap, or 2 weeks for capacity)
+  --disable                              Create disabled / disable (update); --enable re-enables`,
+
+  scheduler: `Usage: node backend/cli.js scheduler <action>
+
+Actions:
+  tick      Run one scheduler tick: recover crashed runs, run what is due, record state,
+            ping the heartbeat. The systemd timer runs this every 15 minutes.
+  status    Show usage, what would run right now and why the rest are waiting, and any
+            starved jobs. Reads usage but runs nothing.`,
 };
 
 function showHelp(resource) {
@@ -127,7 +172,7 @@ function parseArgs(argv) {
   return { args, positional, rawFlags };
 }
 
-const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge'];
+const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge', 'job', 'scheduler'];
 
 // Flags accepted by every command. `--format` selects output shape; `--help`/`-h`
 // short-circuits to usage text before anything else runs.
@@ -208,6 +253,27 @@ const FLAG_SPEC = {
   'check-integrity': { '': { flags: [], maxPositional: 1, usage: 'check-integrity' } },
   'promote-scheduled': { '': { flags: [], maxPositional: 1, usage: 'promote-scheduled' } },
   backup: { '': { flags: ['target', 'config', 'force'], maxPositional: 1, usage: 'backup [--target <path>] [--force] [--config <path>]' } },
+  job: {
+    list: { flags: [], maxPositional: 2, usage: 'job list' },
+    get: { flags: [], maxPositional: 3, usage: 'job get <name>' },
+    create: {
+      flags: ['name', ...jobCommands.FLAG_NAMES, 'file', 'disable'],
+      maxPositional: 2,
+      usage: 'job create --name <name> --kind command|agent --trigger schedule|capacity [options]',
+    },
+    update: {
+      flags: [...jobCommands.FLAG_NAMES, 'file', 'enable', 'disable'],
+      maxPositional: 3,
+      usage: 'job update <name> --<field> <value> [...]',
+    },
+    delete: { flags: [], maxPositional: 3, usage: 'job delete <name>' },
+    run: { flags: ['trigger', 'all', 'now'], maxPositional: 3, usage: 'job run <name> | --trigger <t> | --all [--now]' },
+    runs: { flags: ['limit'], maxPositional: 3, usage: 'job runs [<name>] [--limit <n>]' },
+  },
+  scheduler: {
+    tick: { flags: [], maxPositional: 2, usage: 'scheduler tick' },
+    status: { flags: [], maxPositional: 2, usage: 'scheduler status' },
+  },
 };
 
 // Arity of every flag the CLI knows, so a missing or surplus value is caught by
@@ -230,12 +296,25 @@ const FLAG_ARITY = {
   // boolean
   all: 'boolean',
   clear: 'boolean',
+  disable: 'boolean',
+  enable: 'boolean',
   force: 'boolean',
+  now: 'boolean',
   help: 'boolean',
   replace: 'boolean',
   stdin: 'boolean',
   // value (non-empty required)
   category: 'value',
+  command: 'value',
+  kind: 'value',
+  limit: 'value',
+  maxSessionPct: 'value',
+  maxWeeklyPct: 'value',
+  prompt: 'value',
+  runsPerCycle: 'value',
+  timeoutMinutes: 'value',
+  trigger: 'value',
+  windowHours: 'value',
   completionDate: 'value',
   config: 'value',
   field: 'value',
@@ -251,6 +330,12 @@ const FLAG_ARITY = {
   topic: 'value',
   // clearable (empty value allowed, and means "clear this field")
   blockedBy: 'clearable',
+  cron: 'clearable',
+  description: 'clearable',
+  model: 'clearable',
+  permissionMode: 'clearable',
+  starvationHours: 'clearable',
+  workdir: 'clearable',
   due: 'clearable',
   scheduledDate: 'clearable',
   summary: 'clearable',
@@ -663,6 +748,146 @@ function output(data, format) {
   }
 }
 
+async function readJobFields(args, command) {
+  if (args.prompt !== undefined && args.file !== undefined) {
+    console.error(`${command}: --prompt and --file are mutually exclusive — pass exactly one prompt source.`);
+    process.exit(1);
+  }
+  if (args.enable && args.disable) {
+    console.error(`${command}: --enable and --disable are mutually exclusive.`);
+    process.exit(1);
+  }
+  let fields;
+  try {
+    fields = jobCommands.jobFieldsFromArgs(args);
+  } catch (err) {
+    console.error(`${command}: ${err.message}`);
+    process.exit(1);
+  }
+  if (args.file !== undefined) fields.prompt = await readContentInput(args, 'prompt', command);
+  return fields;
+}
+
+async function handleJob(storage, action, rest, args, format) {
+  if (!action || action === 'help') { showHelp('job'); return; }
+  const name = rest[0];
+  if (action === 'list') {
+    const jobs = await storage.listJobs();
+    if (format === 'json') { output(jobs, format); return; }
+    if (!jobs.length) { console.log('No scheduled jobs.'); return; }
+    const now = new Date();
+    for (const j of jobs) console.log(jobCommands.formatJobLine(j, now));
+  } else if (action === 'get') {
+    if (!name) { console.error('Usage: job get <name>'); process.exit(1); }
+    const job = await storage.getJob(name);
+    if (!job) { console.error(`Job '${name}' not found`); process.exit(1); }
+    if (format === 'json') output(job, format);
+    else console.log(jobCommands.formatJobDetail(job));
+  } else if (action === 'create') {
+    if (!args.name) {
+      console.error('Usage: job create --name <name> --kind command|agent --trigger schedule|capacity [options]');
+      process.exit(1);
+    }
+    const fields = await readJobFields(args, 'job create');
+    const job = await storage.createJob({ name: args.name, ...fields });
+    if (format === 'json') output(job, format);
+    else console.log(`Created job: ${job.name} [${job.kind}, ${job.trigger}]${job.enabled ? '' : ' (disabled)'}`);
+  } else if (action === 'update') {
+    if (!name) { console.error('Usage: job update <name> --<field> <value> [...]'); process.exit(1); }
+    const fields = await readJobFields(args, 'job update');
+    if (!Object.keys(fields).length) {
+      console.error(
+        'Usage: job update <name> --<field> <value> [...]\n' +
+        'Nothing to update: pass at least one job option, --enable or --disable (see "job help").',
+      );
+      process.exit(1);
+    }
+    const job = await storage.updateJob(name, fields);
+    if (format === 'json') output(job, format);
+    else console.log(`Updated job: ${job.name}${job.enabled ? '' : ' (disabled)'}`);
+  } else if (action === 'delete') {
+    if (!name) { console.error('Usage: job delete <name>'); process.exit(1); }
+    await storage.deleteJob(name);
+    console.log(`Deleted job: ${name}`);
+  } else if (action === 'run') {
+    const selectors = [name, args.trigger, args.all].filter((v) => v !== undefined);
+    if (selectors.length !== 1) {
+      console.error(
+        'Usage: job run <name> | --trigger schedule|capacity | --all [--now]\n' +
+        (selectors.length ? 'Pass exactly one of: a job name, --trigger, or --all.' : 'Say which jobs to run.'),
+      );
+      process.exit(1);
+    }
+    const { TRIGGERS } = require('./scheduler');
+    if (args.trigger !== undefined && !TRIGGERS.includes(args.trigger)) {
+      console.error(`job run: --trigger must be one of: ${TRIGGERS.join(', ')} (got "${args.trigger}")`);
+      process.exit(1);
+    }
+    const request = name ? { names: [name] } : args.trigger ? { trigger: args.trigger } : { all: true };
+    const names = await storage.requestJobRuns(request);
+    const kicked = names.length && args.now ? require('./scheduler-host').startNow() : null;
+    if (format === 'json') { output({ queued: names, started: kicked ? kicked.started : false }, format); return; }
+    if (!names.length) { console.log('No enabled jobs matched — nothing queued.'); return; }
+    console.log(`Queued for the next scheduler tick: ${names.join(', ')}`);
+    if (kicked && kicked.started) {
+      console.log('Scheduler started — runs begin now (scheduler status / job runs to follow).');
+    } else if (kicked) {
+      console.log(`Could not start the scheduler now (${kicked.reason}); the next timer tick (<=15 min) will run them.`);
+    } else {
+      console.log('They run on the next timer tick (<=15 min). Add --now on the scheduler host to start immediately.');
+    }
+  } else if (action === 'runs') {
+    let limit = 20;
+    if (args.limit !== undefined) {
+      if (!/^\d+$/.test(args.limit) || Number(args.limit) < 1) {
+        console.error(`job runs: --limit must be a positive whole number (got "${args.limit}")`);
+        process.exit(1);
+      }
+      limit = Number(args.limit);
+    }
+    const runs = await storage.listJobRuns({ jobName: name, limit });
+    if (format === 'json') { output(runs, format); return; }
+    if (!runs.length) { console.log('No runs yet.'); return; }
+    for (const r of runs) console.log(jobCommands.formatRun(r));
+  } else {
+    console.error(`Unknown job action: ${action}\n`);
+    showHelp('job');
+    process.exit(1);
+  }
+}
+
+async function handleScheduler(storage, action, args, format) {
+  if (!action || action === 'help') { showHelp('scheduler'); return; }
+  const host = require('./scheduler-host');
+  if (action === 'tick') {
+    const result = await host.tick(storage);
+    if (format === 'json') { output(result, format); return; }
+    if (result.skipped) { console.log(`Tick skipped: ${result.skipped}`); return; }
+    if (!result.ran.length) console.log('Nothing due.');
+    for (const r of result.ran) console.log(`${r.name} (${r.reason}): ${r.status}`);
+    if (result.usage_error) console.log(`Usage unavailable: ${result.usage_error}`);
+    for (const s of result.starved) {
+      console.log(`STARVED: ${s.name} — ${s.hours_since_success}h since last success (limit ${s.threshold_hours}h)`);
+    }
+  } else if (action === 'status') {
+    const report = await host.status(storage);
+    if (format === 'json') { output(report, format); return; }
+    console.log(`Last tick: ${jobCommands.fmtTime(report.last_tick_at)}${report.host ? ` on ${report.host}` : ''}`);
+    console.log(report.usage_error ? `Usage: unavailable (${report.usage_error})` : jobCommands.formatUsage(report.usage));
+    const waitingBy = Object.fromEntries(report.waiting.map((w) => [w.name, w.reason]));
+    const runBy = Object.fromEntries(report.would_run.map((r) => [r.name, r.reason]));
+    if (!report.jobs.length) console.log('No scheduled jobs.');
+    for (const j of report.jobs) {
+      const note = runBy[j.name] ? `would run now (${runBy[j.name]})` : waitingBy[j.name];
+      console.log(jobCommands.formatJobLine(j, new Date(report.now), note));
+    }
+  } else {
+    console.error(`Unknown scheduler action: ${action}\n`);
+    showHelp('scheduler');
+    process.exit(1);
+  }
+}
+
 async function main() {
   const { args, positional, rawFlags } = parseArgs(process.argv.slice(2));
   const [resource, action, ...rest] = positional;
@@ -978,6 +1203,10 @@ async function main() {
         force: !!args.force,
       });
       console.log(formatBackupResult(result));
+    } else if (resource === 'job') {
+      await handleJob(storage, action, rest, args, format);
+    } else if (resource === 'scheduler') {
+      await handleScheduler(storage, action, args, format);
     } else {
       console.error(`Unknown resource: ${resource}\n`);
       showHelp('main');

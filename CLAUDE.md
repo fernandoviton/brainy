@@ -73,7 +73,7 @@ So a non-zero exit here means *nothing was written* — fix the argument and re-
 - `knowledge attachment add <path> <filepath> [--replace]` — attach a file; the entry must already exist
 - `knowledge attachment remove <path> <filename>` — remove attachment
 
-Utilities: `check-integrity`, `promote-scheduled`, `backup`
+Utilities: `check-integrity`, `promote-scheduled`, `backup`, `job`, `scheduler` (see **Scheduled jobs** below)
 
 **Backup:** `backup [--target <path>] [--force] [--config <path>]` exports the entire store (todos, knowledge, captures, archives, and binary files) to a local **git repo** as a browsable tree, committing each run (local version history). Requires `git` on PATH; an empty target is `git init`ed and gets a `.brainy-backup` sentinel file, a non-empty non-repo target is refused, and an existing repo without the sentinel is refused (won't take over an unrelated repo). Reads `backup.config.json` (gitignored; `targetPath` + `minIntervalDays`, see `backup.config.example.json`) and throttles by `minIntervalDays` unless `--force`. Runs automatically on session start via the `run_backup` hook — a no-op most starts (throttle), and reports through a session message including the committed diff size. When unconfigured it prints a setup pointer instead of failing. Carbonite (or similar) handles off-site/DR of the target folder.
 
@@ -89,6 +89,23 @@ Utilities: `check-integrity`, `promote-scheduled`, `backup`
 **`knowledge upsert` requires exactly one content source with non-empty content** — `--file <path>` (preferred) or `--stdin`, on *every* call. It replaces the entry's whole body, so an upsert with no source, an empty file, an unpiped `--stdin`, or both sources at once would blank or silently half-write a live entry; every one of those exits 1 before touching storage. There is no metadata-only edit: to change `--topic`/`--summary`, `knowledge get <path>` first and re-send the full body with it.
 
 Run `node backend/cli.js <resource> --help` for anything not listed above.
+
+### Scheduled jobs
+
+Jobs (shell commands or headless `claude -p` agent runs) are stored in Supabase and run by a 15-minute systemd timer on the scheduler host. The web UI shows them read-only at `browse/jobs/`, and all changes go through the CLI. Design: `docs/scheduler-architecture.md`.
+
+- `job list` · `job get <name>` · `job runs [<name>] [--limit <n>]` · `scheduler status` (shows usage, what would run now, why the other jobs are waiting, and starved jobs)
+- `job create --name <n> --kind command|agent --trigger schedule|capacity [--command <c> | --file <prompt.md>] [--cron "<expr>"] [--priority P0-P3] [--permission-mode <m>] ...` and `job update <name> ... [--enable|--disable]`. See `job --help` for the capacity gates (`--window-hours`, `--max-weekly-pct`, `--max-session-pct`, `--runs-per-cycle`).
+- **Triggers:**
+  - `schedule`: runs every time its cron expression fires (host local time).
+  - `capacity`: runs only on spare subscription capacity, in the last `window_hours` of the weekly cycle, with weekly and 5-hour usage under their caps, at most `runs_per_cycle` times per cycle.
+- **Running jobs on request from chat:** when the user says something like "run the end-of-week jobs now", "use up the leftover capacity", or "run the backup now", they are approving a run right now. Map it to `job run`, which skips cron and every capacity check:
+  - end-of-week / capacity jobs: `job run --trigger capacity --now`
+  - one job: `job run <name> --now`
+  - everything: `job run --all --now`
+
+  `--now` starts a tick right away on the scheduler host (Linux). From any other machine, the request waits for the next timer tick (within 15 minutes). Afterwards, report which jobs were queued, and check `job runs` once they finish.
+- **Starvation:** a job is starved when it hasn't *succeeded* within twice its cron gap, or within 2 weeks for capacity jobs (override with `--starvation-hours`). Mention starved jobs when they appear in `job list` / `scheduler status`.
 
 ### TODO Statuses
 - `inbox` — Newly captured, not yet triaged

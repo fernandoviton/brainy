@@ -26,7 +26,7 @@ To test working-tree changes, serve `frontend/` over HTTP (opening the files as 
 cd frontend && python -m http.server 8080 --bind 127.0.0.1   # python3 on Linux/macOS
 ```
 
-Then open `http://127.0.0.1:8080/` (browse pages under `/browse/todos/`, `/browse/captures/`, `/browse/knowledge/`). It serves working-tree files directly, so edits show up on a browser refresh — no restart needed.
+Then open `http://127.0.0.1:8080/` (browse pages under `/browse/todos/`, `/browse/captures/`, `/browse/knowledge/`, `/browse/jobs/`). It serves working-tree files directly, so edits show up on a browser refresh — no restart needed.
 
 Deep linking: each browse page reads a query param and auto-opens the matching item — `?todo=<name>`, `?capture=<id>`, `?knowledge=<path>`.
 
@@ -38,6 +38,14 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
 - `backend/cli.js` — CLI routing and output formatting. Commands dispatch under `resource === 'todo'` / `'capture'` / `'knowledge'` branches. Argument parsing converts `--kebab-case` flags to camelCase.
 - `backend/capture-service.js` — thin orchestration layer over storage for captures (e.g., joining media to captures). Follow this pattern if a CLI command needs to compose multiple storage calls.
 - `backend/backup.js` — backup engine. `exportBackup()` dumps the whole store to a local folder tree (throttled by `minIntervalDays`); depends on storage only via `exportAll()` + `downloadMedia()` so it's unit-testable with a mock. `.claude/hooks/run_backup.js` runs it on session start. Config lives in `backup.config.json` (gitignored).
+- **Scheduler** (design: `docs/scheduler-architecture.md`):
+  - `backend/scheduler.js` — pure decision logic: what runs on a tick, the capacity gates, starvation, recovering crashed runs. `runTick()` takes every side effect as an injected dependency.
+  - `backend/scheduler-host.js` — the real dependencies (clock, pids, hostname), plus `status()` and `startNow()`.
+  - `backend/cron.js` — the cron evaluator, in local time. No dependency.
+  - `backend/claude-usage.js` — reads plan usage. It never refreshes the OAuth token itself.
+  - `backend/job-runner.js` — spawns the job (with a timeout that kills the process group), plus the heartbeat ping.
+  - `backend/job-commands.js` — maps CLI flags to job columns, and text formatting.
+  - `scripts/install-scheduler.js` — installs the systemd user units.
 - `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers.
 - `scripts/google-login.js` — CLI Google sign-in; writes `SUPABASE_REFRESH_TOKEN` to `.env`. `scripts/open-browser.js` is its cross-platform browser launcher.
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.

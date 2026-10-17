@@ -341,6 +341,7 @@ async function exportAll() {
     archiveSummaries,
     captures,
     captureMedia,
+    scheduledJobs,
   ] = await Promise.all([
     all('brainy_todos', '*'),
     all('brainy_todo_collateral', 'todo_id, filename, content_type, text_content, storage_path'),
@@ -350,6 +351,7 @@ async function exportAll() {
     all('brainy_archive_summaries', 'year_month, content'),
     all('brainy_captures', '*'),
     all('brainy_capture_media', 'capture_id, filename, content_type, storage_path'),
+    all('brainy_scheduled_jobs', '*'),
   ]);
 
   return {
@@ -361,6 +363,7 @@ async function exportAll() {
     archiveSummaries,
     captures,
     captureMedia,
+    scheduledJobs,
   };
 }
 
@@ -959,6 +962,192 @@ async function getKnowledgeAttachment(knowledgePath, filename) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Scheduled jobs (see backend/scheduler.js and docs/scheduler-architecture.md)
+// ---------------------------------------------------------------------------
+
+const JOBS = 'brainy_scheduled_jobs';
+const RUNS = 'brainy_job_runs';
+const SCHED_STATE = 'brainy_scheduler_state';
+
+async function listJobs() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(JOBS).select('*').eq('user_id', userId).order('name');
+  if (error) throw error;
+  return data || [];
+}
+
+async function getJob(name) {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(JOBS).select('*').eq('user_id', userId).eq('name', name).single();
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return data;
+}
+
+async function createJob(fields) {
+  const { JOB_DEFAULTS, validateJob } = require('./scheduler');
+  const job = { ...JOB_DEFAULTS, ...fields };
+  validateJob(job);
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(JOBS).insert({ ...job, user_id: userId }).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateJob(name, changes) {
+  const { validateJob } = require('./scheduler');
+  const existing = await getJob(name);
+  if (!existing) throw new Error(`job '${name}' not found`);
+  validateJob({ ...existing, ...changes });
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from(JOBS).update(changes).eq('user_id', userId).eq('name', name).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteJob(name) {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(JOBS).delete().eq('user_id', userId).eq('name', name).select('name');
+  if (error) throw error;
+  if (!data || !data.length) throw new Error(`job '${name}' not found`);
+  return { name, deleted: true };
+}
+
+// Mark jobs to run on the next tick regardless of trigger or capacity. Select
+// by explicit names, by trigger, or all enabled jobs. Naming a missing or
+// disabled job is an error rather than a silent skip.
+async function requestJobRuns({ names, trigger, all } = {}) {
+  const jobs = await listJobs();
+  let selected;
+  if (names && names.length) {
+    selected = names.map((n) => {
+      const job = jobs.find((j) => j.name === n);
+      if (!job) throw new Error(`job '${n}' not found`);
+      if (!job.enabled) throw new Error(`job '${n}' is disabled — enable it first (job update ${n} --enable)`);
+      return job;
+    });
+  } else {
+    selected = jobs.filter((j) => j.enabled && (all || j.trigger === trigger));
+  }
+  if (!selected.length) return [];
+  const userId = await getUserId();
+  const { error } = await supabase
+    .from(JOBS)
+    .update({ run_requested_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .in('id', selected.map((j) => j.id));
+  if (error) throw error;
+  return selected.map((j) => j.name);
+}
+
+async function updateJobNextRun(name, nextRunAt) {
+  const userId = await getUserId();
+  const { error } = await supabase.from(JOBS).update({ next_run_at: nextRunAt }).eq('user_id', userId).eq('name', name);
+  if (error) throw error;
+}
+
+async function listJobRuns({ jobName, limit = 20 } = {}) {
+  const userId = await getUserId();
+  let query = supabase.from(RUNS).select('*').eq('user_id', userId);
+  if (jobName) query = query.eq('job_name', jobName);
+  const { data, error } = await query.order('started_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+async function listRunningJobRuns() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(RUNS).select('*').eq('user_id', userId).eq('status', 'running');
+  if (error) throw error;
+  return data || [];
+}
+
+async function startJobRun({ job, reason, host, pid, usage }) {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(RUNS).insert({
+    user_id: userId,
+    job_id: job.id,
+    job_name: job.name,
+    reason,
+    status: 'running',
+    started_at: new Date().toISOString(),
+    host,
+    pid,
+    usage_before: usage || null,
+  }).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+// Close a run and stamp the job's last_* columns. last_run_at is the START of
+// the last completed run (the scheduler measures cron fires from it);
+// last_success_at only moves on success, which is what starvation checks.
+async function finishJobRun(run, { status, exit_code, output_tail, usage_after }) {
+  const userId = await getUserId();
+  const finishedAt = new Date().toISOString();
+  const { error } = await supabase.from(RUNS).update({
+    status,
+    finished_at: finishedAt,
+    exit_code: exit_code ?? null,
+    output_tail: output_tail || null,
+    usage_after: usage_after || null,
+  }).eq('user_id', userId).eq('id', run.id);
+  if (error) throw error;
+
+  const jobUpdate = { last_run_at: run.started_at, last_finished_at: finishedAt, last_status: status };
+  if (status === 'succeeded') jobUpdate.last_success_at = finishedAt;
+  const { error: jobErr } = await supabase.from(JOBS).update(jobUpdate).eq('user_id', userId).eq('id', run.job_id);
+  if (jobErr) throw jobErr;
+}
+
+// A run whose process is gone (crash, shutdown). last_run_at is deliberately
+// left alone so the job counts as not-yet-run and retries on the next tick.
+async function abandonJobRun(run, reason) {
+  const userId = await getUserId();
+  const { error } = await supabase.from(RUNS).update({
+    status: 'abandoned',
+    finished_at: new Date().toISOString(),
+    output_tail: reason,
+  }).eq('user_id', userId).eq('id', run.id);
+  if (error) throw error;
+  const { error: jobErr } = await supabase.from(JOBS).update({ last_status: 'abandoned' }).eq('user_id', userId).eq('id', run.job_id);
+  if (jobErr) throw jobErr;
+}
+
+// Runs that count against a capacity job's runs_per_cycle: capacity and
+// requested runs since the cycle started, excluding abandoned ones.
+async function countCycleRuns(sinceIso) {
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from(RUNS)
+    .select('job_id')
+    .eq('user_id', userId)
+    .gte('started_at', sinceIso)
+    .in('reason', ['capacity', 'requested'])
+    .neq('status', 'abandoned');
+  if (error) throw error;
+  const counts = {};
+  for (const r of data || []) counts[r.job_id] = (counts[r.job_id] || 0) + 1;
+  return counts;
+}
+
+async function getSchedulerState() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(SCHED_STATE).select('*').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function saveSchedulerState(state) {
+  const userId = await getUserId();
+  const { error } = await supabase.from(SCHED_STATE).upsert({ ...state, user_id: userId }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
 module.exports = {
   listTodos,
   getTodo,
@@ -989,4 +1178,19 @@ module.exports = {
   addKnowledgeAttachment,
   removeKnowledgeAttachment,
   getKnowledgeAttachment,
+  listJobs,
+  getJob,
+  createJob,
+  updateJob,
+  deleteJob,
+  requestJobRuns,
+  updateJobNextRun,
+  listJobRuns,
+  listRunningJobRuns,
+  startJobRun,
+  finishJobRun,
+  abandonJobRun,
+  countCycleRuns,
+  getSchedulerState,
+  saveSchedulerState,
 };

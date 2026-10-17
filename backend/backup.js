@@ -26,6 +26,11 @@ const SENTINEL_CONTENT =
   'This folder is a Brainy backup repository, managed by backend/backup.js.\n' +
   'Do not remove this file — Brainy refuses to write into a repo without it.\n';
 
+const JOB_VOLATILE_FIELDS = [
+  'last_run_at', 'last_finished_at', 'last_status', 'last_success_at',
+  'next_run_at', 'run_requested_at', 'updated_at',
+];
+
 function readManifest(targetPath) {
   try {
     return JSON.parse(fs.readFileSync(path.join(targetPath, 'manifest.json'), 'utf8'));
@@ -155,6 +160,14 @@ async function exportBackup({
   }
   for (const s of data.archiveSummaries || []) {
     writeFile(targetPath, ['archive', 'summaries', `${s.year_month}.md`], s.content || '');
+  }
+
+  // --- Scheduled job definitions (minus per-run bookkeeping, which would
+  // make every backup a diff) ---
+  for (const j of data.scheduledJobs || []) {
+    const def = { ...j };
+    for (const k of JOB_VOLATILE_FIELDS) delete def[k];
+    writeFile(targetPath, ['jobs', `${j.name}.json`], JSON.stringify(def, null, 2));
   }
 
   // --- Binary files: download only what's missing (immutable by storage_path) ---

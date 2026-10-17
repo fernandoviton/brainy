@@ -87,6 +87,10 @@ Brainy can export the entire store — todos, knowledge, captures, archives, and
 
 3. It also runs automatically on session start (see Hooks). `backup.config.json` is gitignored (machine-specific). Restore by browsing/checking out the target repo; binaries live under `files/`.
 
+### 8. (Optional) Scheduled jobs
+
+On an always-on Linux host, Brainy can run scheduled jobs. A job is either a shell command (such as the backup) or a headless `claude -p` agent run. It runs either on a cron schedule, or only on spare Claude subscription capacity near the end of the weekly usage cycle. Run `node scripts/install-scheduler.js` to install a 15-minute systemd user timer, then create jobs with `node backend/cli.js job create`. The web UI lists them at `browse/jobs/`. See [`docs/scheduler-architecture.md`](docs/scheduler-architecture.md) for the design, setup, and the optional dead man's switch.
+
 ## CLI Usage
 
 **Arguments are validated.** The CLI never silently ignores something you typed. Each of
@@ -245,6 +249,27 @@ Metadata-only edits are not supported: re-send the full body alongside `--topic`
 There is no `--clear` on `knowledge upsert` — blanking a knowledge body destroys the whole
 record, which is a delete rather than an edit. (`todo update --field notes --clear` exists
 because a TODO survives losing its notes.)
+
+### Scheduled jobs
+
+```bash
+# A nightly command job
+node backend/cli.js job create --name nightly-backup --kind command \
+  --command "node backend/cli.js backup --force" --trigger schedule --cron "0 3 * * *"
+
+# An agent job that only runs on leftover capacity at the end of the week
+node backend/cli.js job create --name weekly-research --kind agent --trigger capacity --file tmp/prompt.md
+
+# What would run now, and why the rest are waiting
+node backend/cli.js scheduler status
+
+# List jobs / recent runs
+node backend/cli.js job list
+node backend/cli.js job runs weekly-research
+
+# Run on demand (skips cron and capacity checks); --now starts a tick immediately
+node backend/cli.js job run --trigger capacity --now
+```
 
 ### Maintenance
 
