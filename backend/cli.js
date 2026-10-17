@@ -74,6 +74,10 @@ Actions:
   upsert <path> --file <path>  Create or update knowledge from a UTF-8 file (preferred; encoding-safe)
   upsert <path> --stdin        Create or update knowledge via stdin (guarded against '?' corruption)
            [--topic <t>] [--summary <s>]
+  attachment list <path>                      List files attached to an entry
+  attachment add <path> <filepath> [--replace] Attach a file (PDF, image, video, ...) to an entry
+  attachment remove <path> <filename>          Remove an attachment
+  attachment get <path> <filename>             Get a signed download URL (1hr expiry)
 
 upsert REQUIRES exactly one content source (--file or --stdin), and that source must
 carry non-empty content: upsert replaces the whole body, so an empty (or missing)
@@ -196,6 +200,10 @@ const FLAG_SPEC = {
       maxPositional: 3,
       usage: 'knowledge upsert <path> --file <path> | --stdin',
     },
+    'attachment list': { flags: [], maxPositional: 4, usage: 'knowledge attachment list <path>' },
+    'attachment add': { flags: ['replace'], maxPositional: 5, usage: 'knowledge attachment add <path> <filepath> [--replace]' },
+    'attachment remove': { flags: [], maxPositional: 5, usage: 'knowledge attachment remove <path> <filename>' },
+    'attachment get': { flags: [], maxPositional: 5, usage: 'knowledge attachment get <path> <filename>' },
   },
   'check-integrity': { '': { flags: [], maxPositional: 1, usage: 'check-integrity' } },
   'promote-scheduled': { '': { flags: [], maxPositional: 1, usage: 'promote-scheduled' } },
@@ -268,6 +276,12 @@ const VALUE_HINTS = {
 // human table is the same class of bug as `--priorty`).
 const FORMATS = ['json', 'text'];
 
+// Actions that take a sub-action word (`todo collateral add`, `knowledge attachment get`).
+function hasSubActions(resource, action) {
+  return (resource === 'todo' && action === 'collateral') ||
+    (resource === 'knowledge' && action === 'attachment');
+}
+
 function flagSpecFor(resource, action, rest) {
   const byAction = FLAG_SPEC[resource];
   if (!byAction) return null;
@@ -275,8 +289,8 @@ function flagSpecFor(resource, action, rest) {
   // single spec regardless of what follows: a word in the action slot is an
   // unexpected positional, not a different command.
   if (byAction['']) return byAction[''];
-  const key = resource === 'todo' && action === 'collateral'
-    ? `collateral ${rest[0] || ''}`
+  const key = hasSubActions(resource, action)
+    ? `${action} ${rest[0] || ''}`
     : (action || '');
   return byAction[key] || null;
 }
@@ -285,8 +299,8 @@ function flagSpecFor(resource, action, rest) {
 function commandLabel(resource, action, rest) {
   const byAction = FLAG_SPEC[resource];
   if (byAction && byAction['']) return resource;
-  if (resource === 'todo' && action === 'collateral') {
-    return ['todo', 'collateral', rest[0]].filter(Boolean).join(' ');
+  if (hasSubActions(resource, action)) {
+    return [resource, action, rest[0]].filter(Boolean).join(' ');
   }
   return [resource, action].filter(Boolean).join(' ');
 }
@@ -864,7 +878,13 @@ async function main() {
         if (!kPath) { console.error('Usage: knowledge get <path>'); process.exit(1); }
         const result = await storage.getKnowledge(kPath);
         if (!result) { console.error(`Knowledge '${kPath}' not found`); process.exit(1); }
-        output(result, format);
+        const attachments = ((await storage.listKnowledgeAttachments(kPath)) || []).map((a) => a.filename);
+        if (format === 'json') {
+          output({ ...result, attachments }, format);
+        } else {
+          output(result, format);
+          if (attachments.length) console.log(`\nAttachments: ${attachments.join(', ')}`);
+        }
       } else if (action === 'upsert') {
         const upsertPath = rest[0] || args.path;
         if (!upsertPath) { console.error('Usage: knowledge upsert <path> --file <path> | --stdin'); process.exit(1); }
@@ -877,6 +897,36 @@ async function main() {
           summary: args.summary,
         });
         console.log(`Upserted: ${result.path}`);
+      } else if (action === 'attachment') {
+        const [subAction, kPath, target] = rest;
+        if (subAction === 'list') {
+          if (!kPath) { console.error('Usage: knowledge attachment list <path>'); process.exit(1); }
+          const result = await storage.listKnowledgeAttachments(kPath);
+          if (format === 'json') {
+            output(result, format);
+          } else {
+            for (const a of result) console.log(`- ${a.filename} (${a.content_type})`);
+          }
+        } else if (subAction === 'add') {
+          if (!kPath || !target) { console.error('Usage: knowledge attachment add <path> <filepath> [--replace]'); process.exit(1); }
+          const result = await storage.addKnowledgeAttachment(kPath, target, { replace: !!args.replace });
+          console.log(`${result.replaced ? 'Replaced' : 'Added'}: ${result.filename} (${result.content_type})`);
+        } else if (subAction === 'remove') {
+          if (!kPath || !target) { console.error('Usage: knowledge attachment remove <path> <filename>'); process.exit(1); }
+          const result = await storage.removeKnowledgeAttachment(kPath, target);
+          console.log(`Removed: ${result.filename}`);
+        } else if (subAction === 'get') {
+          if (!kPath || !target) { console.error('Usage: knowledge attachment get <path> <filename>'); process.exit(1); }
+          const result = await storage.getKnowledgeAttachment(kPath, target);
+          if (format === 'json') {
+            output(result, format);
+          } else {
+            console.log(`${result.filename} (${result.content_type}): ${result.url}`);
+          }
+        } else {
+          console.error(`Unknown attachment action: ${subAction}`);
+          process.exit(1);
+        }
       } else {
         console.error(`Unknown knowledge action: ${action}\n`);
         showHelp('knowledge');

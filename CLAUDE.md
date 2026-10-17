@@ -59,13 +59,19 @@ So a non-zero exit here means *nothing was written* — fix the argument and re-
 |-------------|------------|-----------------------------------------------------|
 | todo        | `<name>`   | create, update, delete, archive                     |
 | capture     | `<id>`     | media, process                                      |
-| knowledge   | `<path>`   | upsert `<path>` --file/--stdin (content required)    |
+| knowledge   | `<path>`   | upsert `<path>` --file/--stdin (content required), attachment |
 
 **TODO collateral** (attachments on a TODO):
 - `todo collateral list <name>` — list attached files
 - `todo collateral get <name> <filename>` — read file content
 - `todo collateral add <name> <filepath>` — attach a file
 - `todo collateral remove <name> <filename>` — remove attachment
+
+**Knowledge attachments** (files on a knowledge entry — invoices, contracts, photos, videos; use these for "save this for our records"):
+- `knowledge attachment list <path>` — list attached files (`knowledge get` also lists them)
+- `knowledge attachment get <path> <filename>` — signed download URL (1hr)
+- `knowledge attachment add <path> <filepath> [--replace]` — attach a file; the entry must already exist
+- `knowledge attachment remove <path> <filename>` — remove attachment
 
 Utilities: `check-integrity`, `promote-scheduled`, `backup`
 

@@ -20,6 +20,10 @@ const mockStorage = {
   addCollateral: jest.fn(),
   removeCollateral: jest.fn(),
   getCollateral: jest.fn(),
+  listKnowledgeAttachments: jest.fn(),
+  addKnowledgeAttachment: jest.fn(),
+  removeKnowledgeAttachment: jest.fn(),
+  getKnowledgeAttachment: jest.fn(),
 };
 
 jest.mock('../backend/storage', () => ({
@@ -120,5 +124,95 @@ describe('knowledge list text format', () => {
     expect(joined).toContain('b.md');
     expect(joined).not.toContain('(yaml)');
     expect(joined).not.toContain('(markdown)');
+  });
+});
+
+describe('knowledge attachment', () => {
+  test('add passes the entry path, file path and replace flag', async () => {
+    mockStorage.addKnowledgeAttachment.mockResolvedValue({ filename: 'a.pdf', content_type: 'application/pdf', replaced: false });
+
+    const { output, exitCode } = await runCLI(['knowledge', 'attachment', 'add', 'home/hvac/leak.md', '/tmp/a.pdf']);
+
+    expect(exitCode).toBe(0);
+    expect(mockStorage.addKnowledgeAttachment).toHaveBeenCalledWith('home/hvac/leak.md', '/tmp/a.pdf', { replace: false });
+    expect(output.join('\n')).toBe('Added: a.pdf (application/pdf)');
+  });
+
+  test('add --replace reports a replacement', async () => {
+    mockStorage.addKnowledgeAttachment.mockResolvedValue({ filename: 'a.pdf', content_type: 'application/pdf', replaced: true });
+
+    const { output } = await runCLI(['knowledge', 'attachment', 'add', 'k.md', '/tmp/a.pdf', '--replace']);
+
+    expect(mockStorage.addKnowledgeAttachment).toHaveBeenCalledWith('k.md', '/tmp/a.pdf', { replace: true });
+    expect(output.join('\n')).toBe('Replaced: a.pdf (application/pdf)');
+  });
+
+  test('list prints one line per file', async () => {
+    mockStorage.listKnowledgeAttachments.mockResolvedValue([
+      { filename: 'a.pdf', content_type: 'application/pdf' },
+      { filename: 'b.jpg', content_type: 'image/jpeg' },
+    ]);
+
+    const { output } = await runCLI(['knowledge', 'attachment', 'list', 'k.md']);
+
+    expect(output).toEqual(['- a.pdf (application/pdf)', '- b.jpg (image/jpeg)']);
+  });
+
+  test('get prints a signed URL', async () => {
+    mockStorage.getKnowledgeAttachment.mockResolvedValue({ filename: 'a.pdf', content_type: 'application/pdf', url: 'https://signed/x' });
+
+    const { output } = await runCLI(['knowledge', 'attachment', 'get', 'k.md', 'a.pdf']);
+
+    expect(mockStorage.getKnowledgeAttachment).toHaveBeenCalledWith('k.md', 'a.pdf');
+    expect(output.join('\n')).toBe('a.pdf (application/pdf): https://signed/x');
+  });
+
+  test('remove deletes by filename', async () => {
+    mockStorage.removeKnowledgeAttachment.mockResolvedValue({ filename: 'a.pdf', removed: true });
+
+    const { output } = await runCLI(['knowledge', 'attachment', 'remove', 'k.md', 'a.pdf']);
+
+    expect(mockStorage.removeKnowledgeAttachment).toHaveBeenCalledWith('k.md', 'a.pdf');
+    expect(output.join('\n')).toBe('Removed: a.pdf');
+  });
+
+  test('unknown sub-action exits 1', async () => {
+    const { exitCode, errors } = await runCLI(['knowledge', 'attachment', 'frob', 'k.md']);
+
+    expect(exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/attachment/);
+  });
+});
+
+describe('knowledge get shows attachments', () => {
+  beforeEach(() => {
+    mockStorage.getKnowledge.mockResolvedValue({ path: 'k.md', topic: 'K', summary: 's', content: '# body' });
+  });
+
+  test('text output lists attachment filenames after the content', async () => {
+    mockStorage.listKnowledgeAttachments.mockResolvedValue([
+      { filename: 'a.pdf', content_type: 'application/pdf' },
+      { filename: 'b.jpg', content_type: 'image/jpeg' },
+    ]);
+
+    const { output } = await runCLI(['knowledge', 'get', 'k.md']);
+
+    expect(output.join('\n')).toBe('# body\n\nAttachments: a.pdf, b.jpg');
+  });
+
+  test('json output carries an attachments array', async () => {
+    mockStorage.listKnowledgeAttachments.mockResolvedValue([{ filename: 'a.pdf', content_type: 'application/pdf' }]);
+
+    const { output } = await runCLI(['knowledge', 'get', 'k.md', '--format', 'json']);
+
+    expect(JSON.parse(output.join('\n')).attachments).toEqual(['a.pdf']);
+  });
+
+  test('no attachments → content only', async () => {
+    mockStorage.listKnowledgeAttachments.mockResolvedValue([]);
+
+    const { output } = await runCLI(['knowledge', 'get', 'k.md']);
+
+    expect(output.join('\n')).toBe('# body');
   });
 });

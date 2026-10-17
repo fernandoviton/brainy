@@ -654,6 +654,10 @@ const EXT_TO_CONTENT_TYPE = {
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.pdf': 'application/pdf',
+  '.webp': 'image/webp',
+  '.heic': 'image/heic',
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
   '.zip': 'application/zip',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -818,6 +822,149 @@ async function getCollateral(todoName, filename) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge attachments
+// ---------------------------------------------------------------------------
+// Files on a knowledge entry are always stored as binaries in brainy_files at
+// <user>/knowledge/<entry folder>/<filename> (the layout of the existing rows).
+// Entries in the same folder share that namespace, so uniqueness is checked by
+// storage_path, not just per entry.
+
+// Supabase can store keys containing '#' but won't sign URLs for them, so the
+// file would be unreachable. Drop '#' (as in "Invoice #123") and replace any
+// other character outside Supabase's safe key set with '_'.
+function storageSafeFilename(filename) {
+  return filename.replace(/#/g, '').replace(/[^\w !\-.*'()&$@=;:+,]/g, '_');
+}
+
+function knowledgeAttachmentLocation(userId, knowledgePath, filename) {
+  const dir = require('path').posix.dirname(knowledgePath);
+  const attachmentPath = dir === '.' ? filename : `${dir}/${filename}`;
+  return { attachmentPath, storagePath: `${userId}/knowledge/${attachmentPath}` };
+}
+
+async function getKnowledgeId(userId, knowledgePath) {
+  const { data, error } = await supabase
+    .from('brainy_knowledge')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('path', knowledgePath)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') throw new Error(`Knowledge '${knowledgePath}' not found`);
+    throw error;
+  }
+  return data.id;
+}
+
+async function getKnowledgeAttachmentRow(knowledgePath, filename, columns) {
+  const userId = await getUserId();
+  const knowledgeId = await getKnowledgeId(userId, knowledgePath);
+  const { data, error } = await supabase
+    .from('brainy_knowledge_attachments')
+    .select(columns)
+    .eq('knowledge_id', knowledgeId)
+    .eq('filename', filename)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') {
+      throw new Error(`Attachment '${filename}' not found on '${knowledgePath}'`);
+    }
+    throw error;
+  }
+  return data;
+}
+
+async function listKnowledgeAttachments(knowledgePath) {
+  const userId = await getUserId();
+  const knowledgeId = await getKnowledgeId(userId, knowledgePath);
+  const { data, error } = await supabase
+    .from('brainy_knowledge_attachments')
+    .select('filename')
+    .eq('knowledge_id', knowledgeId)
+    .order('filename');
+  if (error) throw error;
+
+  return (data || []).map((a) => ({
+    filename: a.filename,
+    content_type: detectContentType(a.filename),
+  }));
+}
+
+async function addKnowledgeAttachment(knowledgePath, filepath, { replace = false } = {}) {
+  const fs = require('fs/promises');
+  const path = require('path');
+  // Read first so a bad local path fails before any network call.
+  const fileBuffer = await fs.readFile(filepath);
+  const userId = await getUserId();
+  const knowledgeId = await getKnowledgeId(userId, knowledgePath);
+
+  const filename = storageSafeFilename(path.basename(filepath));
+  const contentType = detectContentType(filepath);
+  const { attachmentPath, storagePath } = knowledgeAttachmentLocation(userId, knowledgePath, filename);
+
+  const { data: existingRows, error: existingErr } = await supabase
+    .from('brainy_knowledge_attachments')
+    .select('id, knowledge_id')
+    .eq('user_id', userId)
+    .eq('storage_path', storagePath);
+  if (existingErr) throw existingErr;
+  const existing = (existingRows || [])[0];
+  if (existing && existing.knowledge_id !== knowledgeId) {
+    throw new Error(
+      `'${attachmentPath}' is already attached to another knowledge entry in that folder. Rename the file and retry.`,
+    );
+  }
+  if (existing && !replace) {
+    throw new Error(`Attachment '${filename}' already exists on '${knowledgePath}'. Use --replace to overwrite.`);
+  }
+
+  const { error: uploadErr } = await supabase.storage
+    .from('brainy_files')
+    .upload(storagePath, fileBuffer, { contentType, upsert: true });
+  if (uploadErr) throw uploadErr;
+
+  if (!existing) {
+    const { error } = await supabase.from('brainy_knowledge_attachments').insert({
+      user_id: userId,
+      knowledge_id: knowledgeId,
+      path: attachmentPath,
+      filename,
+      storage_path: storagePath,
+    });
+    if (error) throw error;
+  }
+
+  return { filename, content_type: contentType, replaced: !!existing };
+}
+
+async function removeKnowledgeAttachment(knowledgePath, filename) {
+  const attachment = await getKnowledgeAttachmentRow(knowledgePath, filename, 'id, storage_path');
+
+  const { error: removeErr } = await supabase.storage
+    .from('brainy_files')
+    .remove([attachment.storage_path]);
+  if (removeErr) throw removeErr;
+
+  const { error } = await supabase
+    .from('brainy_knowledge_attachments')
+    .delete()
+    .eq('id', attachment.id);
+  if (error) throw error;
+
+  return { filename, removed: true };
+}
+
+async function getKnowledgeAttachment(knowledgePath, filename) {
+  const attachment = await getKnowledgeAttachmentRow(knowledgePath, filename, 'filename, storage_path');
+  const urls = await createSignedMediaUrls([attachment.storage_path]);
+  return {
+    filename: attachment.filename,
+    content_type: detectContentType(attachment.filename),
+    url: urls[0]?.signedUrl || urls[0]?.signedURL || null,
+  };
+}
+
 module.exports = {
   listTodos,
   getTodo,
@@ -844,4 +991,8 @@ module.exports = {
   addCollateral,
   removeCollateral,
   getCollateral,
+  listKnowledgeAttachments,
+  addKnowledgeAttachment,
+  removeKnowledgeAttachment,
+  getKnowledgeAttachment,
 };

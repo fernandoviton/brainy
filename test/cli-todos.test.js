@@ -19,6 +19,10 @@ const mockStorage = {
   addCollateral: jest.fn(),
   removeCollateral: jest.fn(),
   getCollateral: jest.fn(),
+  listKnowledgeAttachments: jest.fn(),
+  addKnowledgeAttachment: jest.fn(),
+  removeKnowledgeAttachment: jest.fn(),
+  getKnowledgeAttachment: jest.fn(),
 };
 
 jest.mock('../backend/storage', () => ({

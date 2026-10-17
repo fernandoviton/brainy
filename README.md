@@ -170,6 +170,24 @@ node backend/cli.js todo collateral get my-task notes.md
 node backend/cli.js todo collateral remove my-task notes.md
 ```
 
+### Knowledge Attachments
+
+Attach files (invoices, contracts, photos, videos) to a knowledge entry. Files are uploaded to Supabase Storage under `<user>/knowledge/<entry folder>/<filename>` and show up in the browse UI. The entry must exist first; filenames must be unique within the entry's folder. Characters that break storage download links are cleaned on attach (`#` is dropped, other unsafe characters become `_`, so `Invoice #123.pdf` is stored as `Invoice 123.pdf`); the stored name is printed.
+
+```bash
+# Attach a file (--replace to overwrite one with the same name)
+node backend/cli.js knowledge attachment add home/hvac/leak.md "/path/to/Invoice 123.pdf"
+
+# List attachments (knowledge get also lists them after the content)
+node backend/cli.js knowledge attachment list home/hvac/leak.md
+
+# Get a signed download URL (1hr expiry)
+node backend/cli.js knowledge attachment get home/hvac/leak.md "Invoice 123.pdf"
+
+# Remove an attachment (deletes the stored file)
+node backend/cli.js knowledge attachment remove home/hvac/leak.md "Invoice 123.pdf"
+```
+
 ### Captures
 
 ```bash

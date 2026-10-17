@@ -38,6 +38,10 @@ const mockStorage = {
   addCollateral: jest.fn(),
   removeCollateral: jest.fn(),
   getCollateral: jest.fn(),
+  listKnowledgeAttachments: jest.fn(),
+  addKnowledgeAttachment: jest.fn(),
+  removeKnowledgeAttachment: jest.fn(),
+  getKnowledgeAttachment: jest.fn(),
 };
 
 jest.mock('../backend/storage', () => ({
@@ -150,6 +154,10 @@ beforeEach(() => {
   mockStorage.removeCollateral.mockResolvedValue({ filename: 'f.md', removed: true });
   mockStorage.getCollateral.mockResolvedValue({ filename: 'f.md', content_type: 'text/markdown', text_content: 'x' });
   mockStorage.listKnowledge.mockResolvedValue([{ path: 'a.md', topic: 'A', summary: 's' }]);
+  mockStorage.listKnowledgeAttachments.mockResolvedValue([{ filename: 'f.pdf', content_type: 'application/pdf' }]);
+  mockStorage.addKnowledgeAttachment.mockResolvedValue({ filename: 'f.pdf', content_type: 'application/pdf', replaced: false });
+  mockStorage.removeKnowledgeAttachment.mockResolvedValue({ filename: 'f.pdf', removed: true });
+  mockStorage.getKnowledgeAttachment.mockResolvedValue({ filename: 'f.pdf', content_type: 'application/pdf', url: 'https://example.com/f.pdf' });
   mockStorage.getKnowledge.mockResolvedValue({ path: 'a.md', topic: 'A', content: '# a', summary: 's' });
   mockStorage.upsertKnowledge.mockResolvedValue({ path: 'a.md', upserted: true });
   mockStorage.checkIntegrity.mockResolvedValue({ ok: true, issues: [] });
@@ -190,6 +198,10 @@ const ALL_COMMANDS = [
   ['capture delete', ['capture', 'delete', 'i']],
   ['knowledge list', ['knowledge', 'list']],
   ['knowledge get', ['knowledge', 'get', 'a.md']],
+  ['knowledge attachment list', ['knowledge', 'attachment', 'list', 'a.md']],
+  ['knowledge attachment add', ['knowledge', 'attachment', 'add', 'a.md', '/p/f.pdf']],
+  ['knowledge attachment get', ['knowledge', 'attachment', 'get', 'a.md', 'f.pdf']],
+  ['knowledge attachment remove', ['knowledge', 'attachment', 'remove', 'a.md', 'f.pdf']],
   ['check-integrity', ['check-integrity']],
   ['promote-scheduled', ['promote-scheduled']],
 ];
@@ -423,6 +435,8 @@ describe('AXIS 9: --format json emits parseable JSON on documented commands', ()
     ['capture media', ['capture', 'media', 'i', '--format', 'json']],
     ['knowledge list', ['knowledge', 'list', '--format', 'json']],
     ['knowledge get', ['knowledge', 'get', 'a.md', '--format', 'json']],
+    ['knowledge attachment list', ['knowledge', 'attachment', 'list', 'a.md', '--format', 'json']],
+    ['knowledge attachment get', ['knowledge', 'attachment', 'get', 'a.md', 'f.pdf', '--format', 'json']],
     ['check-integrity', ['check-integrity', '--format', 'json']],
   ];
 
@@ -541,6 +555,10 @@ describe('AXIS 7: missing required arguments are rejected locally', () => {
     ['capture process (no id)', ['capture', 'process']],
     ['capture delete (no id)', ['capture', 'delete']],
     ['knowledge get (no path)', ['knowledge', 'get']],
+    ['knowledge attachment list (no path)', ['knowledge', 'attachment', 'list']],
+    ['knowledge attachment add (no file)', ['knowledge', 'attachment', 'add', 'a.md']],
+    ['knowledge attachment get (no filename)', ['knowledge', 'attachment', 'get', 'a.md']],
+    ['knowledge attachment remove (no filename)', ['knowledge', 'attachment', 'remove', 'a.md']],
     ['knowledge upsert (no path)', ['knowledge', 'upsert', '--file', 'IGNORED']],
   ];
 
