@@ -65,6 +65,25 @@ Summarize concisely:
 
 **Self-check before sending the report:** re-scan the threads you labeled `ai-done` and confirm that each human-sent one is named somewhere in the report. A human-sent thread the user cannot find in your report is a thread you closed behind their back — that is the failure this step exists to prevent.
 
+## Autonomous mode (scheduled job)
+
+When this skill runs as the `email-triage` scheduled job (the prompt says "autonomous mode"; `BRAINY_RUN_ID` is set), nobody is there to answer questions. Steps 1–5 still apply, with these changes:
+
+- **Tools.** You can only read Gmail and add or remove labels. Send, reply, draft, forward, trash, spam and label-management tools are removed. Never try to work around that, and never "unsubscribe" by any route.
+- **Window.** Search `in:inbox newer_than:3d -label:ai-done -label:ai-todo`. Runs are daily, and the overlap catches anything a failed run missed.
+- **Don't ask; decide.**
+  - **Dealt with, or no action needed** → label `ai-done`.
+  - **Needs the user** → create the TODO yourself (status `inbox`, or `active` if it's time-sensitive). Put a `## Open questions` section in its notes with whatever you can't decide: should they reply, which option, by when. Then label the thread `ai-todo`.
+  - If an open TODO already covers the thread, update that TODO's notes instead of creating a duplicate.
+  - Write notes with the Write tool to `tmp/<name>.md` and pass `--file`. Never use `--stdin`.
+- **Log every label you apply.** One event per thread:
+  ```bash
+  node backend/cli.js job log-event --action "label ai-done" --type email --target "<sender>: <subject>" --detail "<human|machine>; <one-line reason>"
+  ```
+  The CLI audits TODO and knowledge writes automatically, but it can't see Gmail, so these events are the only reliable record of what you closed.
+- **Your final message is the run report** the user reads on the Activity page and in their session digest. Use the step 5 structure, in markdown, starting with a one-line summary (e.g. "Reviewed 23 threads: 2 TODOs, 19 closed, 2 knowledge entries"). The human-sent list is mandatory, and the self-check still applies.
+- **When unsure, open a TODO rather than closing the thread.** A wrongly-opened TODO costs a glance. A wrongly-closed human email costs a missed person.
+
 ## Key principles
 
 - **Mail from a person is never "noise."** It can still be closed — but only after judging it individually and naming it in the report. Unactionable content is not the same as an unimportant email: when someone chooses to send you a bulk newsletter, the *choice* is the content, and only the user can read it. Surface it and let them.

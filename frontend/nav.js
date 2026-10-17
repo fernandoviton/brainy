@@ -8,6 +8,7 @@
     { label: 'TODOs', href: root + 'browse/todos/' },
     { label: 'Captures', href: root + 'browse/captures/' },
     { label: 'Knowledge', href: root + 'browse/knowledge/' },
+    { label: 'Activity', href: root + 'browse/activity/' },
     { label: 'Jobs', href: root + 'browse/jobs/' },
   ];
 

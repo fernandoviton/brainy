@@ -1,13 +1,14 @@
 /**
- * Host wiring for the scheduler: the real clock, process table, usage probe,
- * job runner and heartbeat that backend/scheduler.js takes as dependencies,
+ * Host wiring for the scheduler: the real clock, process table, usage probe
+ * and job runner that backend/scheduler.js takes as dependencies,
  * plus `startNow()` to kick the systemd unit immediately.
  */
+const fs = require('fs');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const { runTick, planTick, starvation, cycleStart } = require('./scheduler');
 const { createUsageProbe } = require('./claude-usage');
-const { runJob, createHeartbeat } = require('./job-runner');
+const { runJob, runPrecheck } = require('./job-runner');
 
 const UNIT = 'brainy-scheduler';
 
@@ -25,23 +26,18 @@ function bootTime() {
   return new Date(Date.now() - os.uptime() * 1000);
 }
 
-async function tick(storage, env = process.env) {
-  const heartbeat = createHeartbeat(env.SCHEDULER_HEARTBEAT_URL);
-  try {
-    return await runTick({
-      storage,
-      probeUsage: createUsageProbe(),
-      runJob,
-      heartbeat,
-      host: os.hostname(),
-      pid: process.pid,
-      bootTime: bootTime(),
-      isPidAlive,
-    });
-  } catch (err) {
-    await heartbeat({ ok: false, message: `tick crashed: ${err.message}` });
-    throw err;
-  }
+function tick(storage) {
+  return runTick({
+    storage,
+    probeUsage: createUsageProbe(),
+    runJob,
+    runPrecheck,
+    removeFile: (f) => fs.rmSync(f, { force: true }),
+    host: os.hostname(),
+    pid: process.pid,
+    bootTime: bootTime(),
+    isPidAlive,
+  });
 }
 
 // Read-only view of what the scheduler would do right now and why.

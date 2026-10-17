@@ -106,11 +106,17 @@ Design: `docs/scheduler-architecture.md`.
 **`brainy_scheduled_jobs`**: one row per job. `UQ(user_id, name)`.
 - Definition: `id` PK, `user_id`, `name`, `description`, `enabled`, `kind` {command, agent}, `command` / `prompt` (CHK: the one matching `kind` is required), `workdir`, `model`, `permission_mode`, `timeout_minutes`, `priority` {P0..P3}, `starvation_hours`
 - Trigger: `trigger` {schedule, capacity}, `cron` (CHK: required for schedule), and the capacity gates `window_hours`, `max_weekly_pct`, `max_session_pct`, `runs_per_cycle`
+- Agent controls: `precheck` (exit 10 = skip), `allowed_tools`, `disallowed_tools` (text[])
 - Bookkeeping (written by the tick): `run_requested_at`, `last_run_at`, `last_finished_at`, `last_status`, `last_success_at`, `next_run_at`
 
 **`brainy_job_runs`**: one row per run. `job_id` FK → `brainy_scheduled_jobs` (cascade).
 - `job_name`, `reason` {schedule, capacity, requested}, `status` {running, succeeded, failed, timed_out, abandoned}
 - `started_at`, `finished_at`, `exit_code`, `output_tail` (last 4,000 chars), `host`, `pid`, `usage_before` / `usage_after` (jsonb)
+- Agent runs: `report` (the final message, in full), `transcript_path` (stream-json in `brainy_files`), `permission_denials` (jsonb)
+
+**`brainy_run_events`**: the audit trail. `run_id` FK → `brainy_job_runs` (cascade).
+- `job_name`, `action` (e.g. `create`, `update`, `label ai-done`), `target_type` (`todo`, `knowledge`, `capture`, `email`), `target`, `detail`
+- Written by the CLI for every write made while `BRAINY_RUN_ID` is set, and by `job log-event` for actions the CLI can't see
 
 **`brainy_scheduler_state`**: one row per user (`user_id` PK), overwritten every tick.
 - `last_tick_at`, `host`, `usage` (jsonb, the latest plan usage reading), `usage_error`, `waiting` (jsonb: why each job is waiting), `starved` (jsonb)
@@ -134,6 +140,7 @@ Design: `docs/scheduler-architecture.md`.
 | `auth.users`            | `brainy_job_runs`                | `user_id`      | —         |
 | `auth.users`            | `brainy_scheduler_state`         | `user_id` (PK) | —         |
 | `brainy_scheduled_jobs` | `brainy_job_runs`                | `job_id`       | CASCADE   |
+| `brainy_job_runs`       | `brainy_run_events`              | `run_id`       | CASCADE   |
 
 *Note: `brainy_goals` was intentionally removed — goals are not tracked in the database.*
 

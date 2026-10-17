@@ -1,9 +1,10 @@
-var CACHE_NAME = 'brainy-v4';
+var CACHE_NAME = 'brainy-v5';
 var SHELL_FILES = [
   '.',
   'shared.css',
   'nav.js',
   'utils.js',
+  'health.js',
   'capture/',
   'capture/index.html',
   'capture/app.js',

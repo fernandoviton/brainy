@@ -43,9 +43,13 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
   - `backend/scheduler-host.js` — the real dependencies (clock, pids, hostname), plus `status()` and `startNow()`.
   - `backend/cron.js` — the cron evaluator, in local time. No dependency.
   - `backend/claude-usage.js` — reads plan usage. It never refreshes the OAuth token itself.
-  - `backend/job-runner.js` — spawns the job (with a timeout that kills the process group), plus the heartbeat ping.
+  - `backend/job-runner.js` — runs a job's precheck (exit 10 = skip), spawns the job with a timeout that kills the process group, and captures an agent run's stream-json transcript and final report.
   - `backend/job-commands.js` — maps CLI flags to job columns, and text formatting.
   - `scripts/install-scheduler.js` — installs the systemd user units.
+  - `backend/agent-digest.js` + `.claude/hooks/agent_digest.js` — the session-start digest of agent reports.
+  - `frontend/health.js` — the site-wide scheduler health banner and nav badges, loaded on every page after its `app.js`.
+  - `tools/fetch-capture-media.js` — downloads a capture's media to `tmp/` so agent jobs can read it without network tools.
+  - **Audit trail:** `audit()` in `cli.js` records every CLI write made while `BRAINY_RUN_ID` is set. A new write command must call it, or agent runs can't be checked.
 - `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers.
 - `scripts/google-login.js` — CLI Google sign-in; writes `SUPABASE_REFRESH_TOKEN` to `.env`. `scripts/open-browser.js` is its cross-platform browser launcher.
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.

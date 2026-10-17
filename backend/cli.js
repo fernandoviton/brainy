@@ -67,7 +67,8 @@ Actions:
   get <id>              Get capture details including media
   media <capture_id>    Get signed download URLs for media (1hr expiry)
   process <id>          Mark a capture as processed
-  delete <id>           Delete a capture (processed or unprocessed) and its media`,
+  delete <id>           Delete a capture (processed or unprocessed) and its media
+  pending               Exit 0 if any captures are unprocessed, 10 if none (a job precheck)`,
 
   knowledge: `Usage: node backend/cli.js knowledge <action> [options]
 
@@ -99,6 +100,11 @@ Actions:
                                          capacity checks. --now also starts the tick immediately
                                          (on the scheduler host).
   runs [<name>] [--limit <n>]            Recent runs (default 20)
+  reports [--since <iso>] [--job <name>] [--limit <n>]
+                                         Agent run reports with their audited actions
+  log-event --action <a> --type <t> --target <x> [--detail <d>]
+                                         Inside a job run: record an action the CLI cannot
+                                         see (e.g. a Gmail label). Needs BRAINY_RUN_ID.
 
 Job options (create / update; an empty value clears the clearable ones):
   --kind command|agent                   command: shell command; agent: \`claude -p\` prompt
@@ -118,13 +124,20 @@ Job options (create / update; an empty value clears the clearable ones):
   --runs-per-cycle <n>                   Capacity: at most n runs per weekly cycle (1)
   --starvation-hours <n>                 Flag as starved after n hours without a success
                                          (default: 2x the cron gap, or 2 weeks for capacity)
-  --disable                              Create disabled / disable (update); --enable re-enables`,
+  --precheck <cmd>                       Cheap command run first: exit 0 = run the job, exit 10 =
+                                         nothing to do (skip, no LLM call), other = failure
+  --allowed-tools <a,b,...>              Agent jobs: tools allowed without approval (comma list;
+                                         patterns like "Bash(node backend/cli.js todo *)")
+  --disallowed-tools <a,b,...>           Agent jobs: tools removed entirely (e.g. Gmail send)
+  --disable                              Create disabled / disable (update); --enable re-enables
+
+Every CLI write made during a job run (BRAINY_RUN_ID set) is recorded as an audit event.`,
 
   scheduler: `Usage: node backend/cli.js scheduler <action>
 
 Actions:
   tick      Run one scheduler tick: recover crashed runs, run what is due, record state,
-            ping the heartbeat. The systemd timer runs this every 15 minutes.
+            and record state. The systemd timer runs this every 15 minutes.
   status    Show usage, what would run right now and why the rest are waiting, and any
             starved jobs. Reads usage but runs nothing.`,
 };
@@ -236,6 +249,7 @@ const FLAG_SPEC = {
     media: { flags: [], maxPositional: 3, usage: 'capture media <capture_id>' },
     process: { flags: [], maxPositional: 3, usage: 'capture process <id>' },
     delete: { flags: [], maxPositional: 3, usage: 'capture delete <id>' },
+    pending: { flags: [], maxPositional: 2, usage: 'capture pending' },
   },
   knowledge: {
     list: { flags: ['prefix'], maxPositional: 2, usage: 'knowledge list [--prefix <path>]' },
@@ -269,6 +283,12 @@ const FLAG_SPEC = {
     delete: { flags: [], maxPositional: 3, usage: 'job delete <name>' },
     run: { flags: ['trigger', 'all', 'now'], maxPositional: 3, usage: 'job run <name> | --trigger <t> | --all [--now]' },
     runs: { flags: ['limit'], maxPositional: 3, usage: 'job runs [<name>] [--limit <n>]' },
+    reports: { flags: ['since', 'job', 'limit'], maxPositional: 2, usage: 'job reports [--since <iso>] [--job <name>] [--limit <n>]' },
+    'log-event': {
+      flags: ['action', 'type', 'target', 'detail'],
+      maxPositional: 2,
+      usage: 'job log-event --action <a> --type <t> --target <x> [--detail <d>]',
+    },
   },
   scheduler: {
     tick: { flags: [], maxPositional: 2, usage: 'scheduler tick' },
@@ -304,7 +324,13 @@ const FLAG_ARITY = {
   replace: 'boolean',
   stdin: 'boolean',
   // value (non-empty required)
+  action: 'value',
   category: 'value',
+  detail: 'value',
+  job: 'value',
+  since: 'value',
+  target: 'value',
+  type: 'value',
   command: 'value',
   kind: 'value',
   limit: 'value',
@@ -330,7 +356,10 @@ const FLAG_ARITY = {
   topic: 'value',
   // clearable (empty value allowed, and means "clear this field")
   blockedBy: 'clearable',
+  allowedTools: 'clearable',
   cron: 'clearable',
+  disallowedTools: 'clearable',
+  precheck: 'clearable',
   description: 'clearable',
   model: 'clearable',
   permissionMode: 'clearable',
@@ -695,6 +724,25 @@ async function readNotesInput(args, command) {
   return undefined;
 }
 
+// Audit trail: inside a scheduled job run, record every write so the run's
+// report can be checked against what actually happened. Never fails the write.
+async function audit(storage, action, targetType, target, detail) {
+  const runId = process.env.BRAINY_RUN_ID;
+  if (!runId) return;
+  try {
+    await storage.recordRunEvent({
+      runId,
+      jobName: process.env.BRAINY_JOB_NAME || null,
+      action,
+      targetType,
+      target: target || null,
+      detail: detail || null,
+    });
+  } catch (err) {
+    console.error(`[cli] audit event not recorded: ${err.message}`);
+  }
+}
+
 function output(data, format) {
   if (format === 'json') {
     console.log(JSON.stringify(data, null, 2));
@@ -849,6 +897,41 @@ async function handleJob(storage, action, rest, args, format) {
     if (format === 'json') { output(runs, format); return; }
     if (!runs.length) { console.log('No runs yet.'); return; }
     for (const r of runs) console.log(jobCommands.formatRun(r));
+  } else if (action === 'reports') {
+    if (args.since !== undefined && Number.isNaN(Date.parse(args.since))) {
+      console.error(`job reports: --since must be a date/time (e.g. 2026-10-17 or 2026-10-17T08:00:00Z), got "${args.since}"`);
+      process.exit(1);
+    }
+    let limit = 20;
+    if (args.limit !== undefined) {
+      if (!/^\d+$/.test(args.limit) || Number(args.limit) < 1) {
+        console.error(`job reports: --limit must be a positive whole number (got "${args.limit}")`);
+        process.exit(1);
+      }
+      limit = Number(args.limit);
+    }
+    const reports = await storage.listReports({ since: args.since, jobName: args.job, limit });
+    if (format === 'json') { output(reports, format); return; }
+    if (!reports.length) { console.log('No reports.'); return; }
+    for (const r of reports) console.log(jobCommands.formatReport(r));
+  } else if (action === 'log-event') {
+    if (!process.env.BRAINY_RUN_ID) {
+      console.error('job log-event: only valid inside a scheduled job run (BRAINY_RUN_ID is not set).');
+      process.exit(1);
+    }
+    if (!args.action || !args.type || !args.target) {
+      console.error('Usage: job log-event --action <a> --type <t> --target <x> [--detail <d>]');
+      process.exit(1);
+    }
+    await storage.recordRunEvent({
+      runId: process.env.BRAINY_RUN_ID,
+      jobName: process.env.BRAINY_JOB_NAME || null,
+      action: args.action,
+      targetType: args.type,
+      target: args.target,
+      detail: args.detail || null,
+    });
+    console.log(`Logged: ${args.action} ${args.type} ${args.target}`);
   } else {
     console.error(`Unknown job action: ${action}\n`);
     showHelp('job');
@@ -948,6 +1031,7 @@ async function main() {
           blocked_by: args.blockedBy,
           notes: await readNotesInput(args, 'todo create'),
         });
+        await audit(storage, 'create', 'todo', result.name, args.summary);
         if (format === 'json') {
           output(result, format);
         } else {
@@ -978,11 +1062,13 @@ async function main() {
         const notes = await readNotesInput(args, 'todo update');
         if (notes !== undefined) changes.notes = notes;
         const result = await storage.updateTodo(name, changes);
+        await audit(storage, 'update', 'todo', name, Object.keys(changes).join(', '));
         console.log(`Updated: ${result.name} [${result.status}]`);
       } else if (action === 'delete') {
         const name = rest[0] || args.name;
         if (!name) { console.error('Usage: todo delete <name>'); process.exit(1); }
         await storage.deleteTodo(name);
+        await audit(storage, 'delete', 'todo', name);
         console.log(`Deleted: ${name}`);
       } else if (action === 'collateral') {
         const [subAction, ...subRest] = rest;
@@ -1002,6 +1088,7 @@ async function main() {
           const filepath = subRest[1];
           if (!name || !filepath) { console.error('Usage: todo collateral add <name> <filepath> [--replace]'); process.exit(1); }
           const result = await storage.addCollateral(name, filepath, { replace: !!args.replace });
+          await audit(storage, 'add collateral', 'todo', name, result.filename);
           const verb = result.replaced ? 'Replaced' : 'Added';
           console.log(`${verb}: ${result.filename} (${result.content_type}) [${result.is_text ? 'text' : 'binary'}]`);
         } else if (subAction === 'remove') {
@@ -1009,6 +1096,7 @@ async function main() {
           const filename = subRest[1];
           if (!name || !filename) { console.error('Usage: todo collateral remove <name> <filename>'); process.exit(1); }
           const result = await storage.removeCollateral(name, filename);
+          await audit(storage, 'remove collateral', 'todo', name, filename);
           console.log(`Removed: ${result.filename}`);
         } else if (subAction === 'get') {
           const name = subRest[0];
@@ -1042,6 +1130,7 @@ async function main() {
           summaryText: args.summaryText,
           completionDate: args.completionDate,
         });
+        await audit(storage, 'archive', 'todo', name, args.summaryText);
         console.log(`Archived: ${result.name} -> ${result.year_month}`);
       } else {
         console.error(`Unknown todo action: ${action}\n`);
@@ -1077,6 +1166,7 @@ async function main() {
         const id = rest[0];
         if (!id) { console.error('Usage: capture process <id>'); process.exit(1); }
         const result = await captureService.processCapture(id);
+        await audit(storage, 'process', 'capture', result.id || id);
         if (format === 'json') {
           output(result, format);
         } else {
@@ -1087,7 +1177,12 @@ async function main() {
         if (!id) { console.error('Usage: capture delete <id>'); process.exit(1); }
         const result = await captureService.deleteCapture(id);
         if (result === null) { console.error(`Capture '${id}' not found`); process.exit(1); }
+        await audit(storage, 'delete', 'capture', result.id || id);
         console.log(`Deleted: ${result.id}`);
+      } else if (action === 'pending') {
+        const pending = await captureService.listCapturesWithMedia(undefined);
+        console.log(`${pending.length} unprocessed capture${pending.length === 1 ? '' : 's'}`);
+        if (!pending.length) process.exit(10);
       } else {
         console.error(`Unknown capture action: ${action}\n`);
         showHelp('capture');
@@ -1121,6 +1216,7 @@ async function main() {
           topic: args.topic,
           summary: args.summary,
         });
+        await audit(storage, 'upsert', 'knowledge', result.path);
         console.log(`Upserted: ${result.path}`);
       } else if (action === 'attachment') {
         const [subAction, kPath, target] = rest;
@@ -1135,10 +1231,12 @@ async function main() {
         } else if (subAction === 'add') {
           if (!kPath || !target) { console.error('Usage: knowledge attachment add <path> <filepath> [--replace]'); process.exit(1); }
           const result = await storage.addKnowledgeAttachment(kPath, target, { replace: !!args.replace });
+          await audit(storage, 'add attachment', 'knowledge', kPath, result.filename);
           console.log(`${result.replaced ? 'Replaced' : 'Added'}: ${result.filename} (${result.content_type})`);
         } else if (subAction === 'remove') {
           if (!kPath || !target) { console.error('Usage: knowledge attachment remove <path> <filename>'); process.exit(1); }
           const result = await storage.removeKnowledgeAttachment(kPath, target);
+          await audit(storage, 'remove attachment', 'knowledge', kPath, target);
           console.log(`Removed: ${result.filename}`);
         } else if (subAction === 'get') {
           if (!kPath || !target) { console.error('Usage: knowledge attachment get <path> <filename>'); process.exit(1); }

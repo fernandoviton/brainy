@@ -80,6 +80,13 @@ function validateJob(job) {
   assertInt(job, 'max_session_pct', { min: 1, max: 100 });
   assertInt(job, 'runs_per_cycle', { min: 1 });
   assertInt(job, 'starvation_hours', { min: 1, nullable: true });
+  for (const field of ['allowed_tools', 'disallowed_tools']) {
+    const v = job[field];
+    if (v === null || v === undefined) continue;
+    if (!Array.isArray(v) || v.some((t) => typeof t !== 'string' || t.trim() === '')) {
+      throw new Error(`${field} must be a list of non-empty tool names/patterns`);
+    }
+  }
 }
 
 const ms = (t) => (t ? new Date(t).getTime() : null);
@@ -234,8 +241,52 @@ function errorMessage(err) {
   return (err && err.message) || String(err);
 }
 
+// Exit codes for a job's precheck command.
+const PRECHECK_SKIP_CODE = 10;
+
+// Run one job: precheck, then the job itself, then file away the transcript.
+async function executeJob({ job, reason, storage, runJob, runPrecheck, removeFile, host, pid, usage }) {
+  if (job.precheck) {
+    const pre = await runPrecheck(job);
+    if (pre.outcome === 'skip') {
+      // Nothing to do is healthy: stamp the job, no run row, no LLM call.
+      await storage.markJobSkipped(job);
+      return { status: 'skipped' };
+    }
+    if (pre.outcome === 'error') {
+      const run = await storage.startJobRun({ job, reason, host, pid, usage });
+      const result = {
+        status: 'failed',
+        exit_code: pre.exit_code ?? null,
+        output_tail: `precheck failed (exit ${pre.exit_code}):\n${pre.output_tail || ''}`,
+      };
+      await storage.finishJobRun(run, result);
+      return { status: 'failed' };
+    }
+  }
+
+  const run = await storage.startJobRun({ job, reason, host, pid, usage });
+  let result;
+  try {
+    result = await runJob(job, { runId: run.id });
+  } catch (err) {
+    result = { status: 'failed', exit_code: null, output_tail: `runner error: ${errorMessage(err)}` };
+  }
+  if (result.transcript_file) {
+    try {
+      result.transcript_path = await storage.uploadRunTranscript(run, result.transcript_file);
+    } catch (err) {
+      result.transcript_path = null;
+      result.output_tail = `${result.output_tail || ''}\n[brainy] transcript upload failed: ${errorMessage(err)}`;
+    }
+    removeFile(result.transcript_file);
+    delete result.transcript_file;
+  }
+  return { run, result };
+}
+
 async function runTick({
-  storage, probeUsage, runJob, heartbeat, now = () => new Date(),
+  storage, probeUsage, runJob, runPrecheck, removeFile = () => {}, now = () => new Date(),
   host, pid, bootTime, isPidAlive, log = console.log,
 }) {
   const jobs = await storage.listJobs();
@@ -272,13 +323,13 @@ async function runTick({
   const plan = planTick({ jobs, now: now(), usage: usageError ? null : usage, cycleRuns });
   const ran = [];
   for (const { job, reason } of plan.run) {
-    const run = await storage.startJobRun({ job, reason, host, pid, usage });
-    let result;
-    try {
-      result = await runJob(job);
-    } catch (err) {
-      result = { status: 'failed', exit_code: null, output_tail: `runner error: ${errorMessage(err)}` };
+    const outcome = await executeJob({ job, reason, storage, runJob, runPrecheck, removeFile, host, pid, usage });
+    if (!outcome.run) {
+      ran.push({ name: job.name, reason, status: outcome.status });
+      log(`${job.name} (${reason}): ${outcome.status}`);
+      continue;
     }
+    const { run, result } = outcome;
     if (job.kind === 'agent' && !usageError) {
       try {
         result.usage_after = await probeUsage();
@@ -290,14 +341,15 @@ async function runTick({
     log(`${job.name} (${reason}): ${result.status}`);
   }
 
-  // 4. Persist what the web page shows, then report.
+  // 4. Persist what the web page shows (its health banner is the dead man's
+  // switch: a stale last_tick_at means the scheduler itself is down).
   const t = now();
   for (const job of jobs) {
     if (job.trigger === 'schedule' && job.enabled) await storage.updateJobNextRun(job.name, nextRunAt(job, t));
   }
   const ranNames = new Set(ran.map((r) => r.name));
   const starved = jobs
-    .filter((j) => !ranNames.has(j.name) || ran.find((r) => r.name === j.name).status !== 'succeeded')
+    .filter((j) => !ranNames.has(j.name) || !['succeeded', 'skipped'].includes(ran.find((r) => r.name === j.name).status))
     .map((j) => starvation(j, t))
     .filter(Boolean);
   await storage.saveSchedulerState({
@@ -309,15 +361,12 @@ async function runTick({
     starved,
   });
 
-  const message = starved.length
-    ? `starved: ${starved.map((s) => `${s.name} (${s.hours_since_success}h since success, limit ${s.threshold_hours}h)`).join('; ')}`
-    : `ok: ran ${ran.length} job(s)`;
-  await heartbeat({ ok: starved.length === 0, message });
 
   return { ran, waiting: plan.waiting, starved, usage, usage_error: usageError };
 }
 
 module.exports = {
+  PRECHECK_SKIP_CODE,
   JOB_DEFAULTS,
   KINDS,
   TRIGGERS,

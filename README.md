@@ -87,9 +87,9 @@ Brainy can export the entire store — todos, knowledge, captures, archives, and
 
 3. It also runs automatically on session start (see Hooks). `backup.config.json` is gitignored (machine-specific). Restore by browsing/checking out the target repo; binaries live under `files/`.
 
-### 8. (Optional) Scheduled jobs
+### 8. (Optional) Scheduled jobs and agents
 
-On an always-on Linux host, Brainy can run scheduled jobs. A job is either a shell command (such as the backup) or a headless `claude -p` agent run. It runs either on a cron schedule, or only on spare Claude subscription capacity near the end of the weekly usage cycle. Run `node scripts/install-scheduler.js` to install a 15-minute systemd user timer, then create jobs with `node backend/cli.js job create`. The web UI lists them at `browse/jobs/`. See [`docs/scheduler-architecture.md`](docs/scheduler-architecture.md) for the design, setup, and the optional dead man's switch.
+On an always-on Linux host, Brainy can run scheduled jobs. A job is either a shell command (such as the backup) or a headless `claude -p` agent run (email triage, capture processing, an end-of-week proactive review). It runs on a cron schedule, or only on spare Claude subscription capacity near the end of the weekly usage cycle. Agent jobs are restricted by per-job tool allowlists. Every Brainy write they make is audited, and their reports appear on the web UI's **Activity** page and in a session-start digest. Run `node scripts/install-scheduler.js` to install a 15-minute systemd user timer, then create jobs with `node backend/cli.js job create`. See [`docs/scheduler-architecture.md`](docs/scheduler-architecture.md) for the design and setup.
 
 ## CLI Usage
 

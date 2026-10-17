@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainy — Activity</title>
+  <meta name="theme-color" content="#F7F3ED">
+  <link rel="icon" href="../../icons/icon-192.png">
+  <link rel="stylesheet" href="../../shared.css">
+  <link rel="stylesheet" href="../jobs/app.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>Agent Activity</h1>
+
+    <div id="auth-section">
+      <p>Sign in to view agent reports.</p>
+      <button id="login-btn" type="button">Sign in with Google</button>
+    </div>
+
+    <div id="content-section" style="display:none">
+      <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
+      <div id="filters" class="filter-pills"></div>
+      <div id="cards"></div>
+      <div id="status-msg"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../config.local.js"></script>
+  <script src="../../config.js"></script>
+  <script src="../../nav.js"></script>
+  <script src="../../utils.js"></script>
+  <script src="app.js"></script>
+  <script src="../../health.js"></script>
+</body>
+</html>

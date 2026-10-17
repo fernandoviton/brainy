@@ -39,6 +39,7 @@ describe('setup-hooks script', () => {
     expect(written.hooks.SessionStart[0].hooks.map((h) => h.command)).toEqual([
       hookCommand(REPO_ROOT, 'run_promote_scheduled.js'),
       hookCommand(REPO_ROOT, 'run_backup.js'),
+      hookCommand(REPO_ROOT, 'agent_digest.js'),
     ]);
 
     fs.unlinkSync(settingsPath);

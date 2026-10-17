@@ -259,6 +259,9 @@ create table if not exists brainy_scheduled_jobs (
   runs_per_cycle integer not null default 1 check (runs_per_cycle > 0),
   priority text not null default 'P2' check (priority in ('P0', 'P1', 'P2', 'P3')),
   starvation_hours integer check (starvation_hours > 0),
+  precheck text,
+  allowed_tools text[],
+  disallowed_tools text[],
   run_requested_at timestamptz,
   last_run_at timestamptz,
   last_finished_at timestamptz,
@@ -306,8 +309,19 @@ create table if not exists brainy_job_runs (
   pid integer,
   usage_before jsonb,
   usage_after jsonb,
+  report text,
+  transcript_path text,
+  permission_denials jsonb,
   created_at timestamptz default now()
 );
+
+-- Columns added after the first release of the tables above (idempotent).
+alter table brainy_scheduled_jobs add column if not exists precheck text;
+alter table brainy_scheduled_jobs add column if not exists allowed_tools text[];
+alter table brainy_scheduled_jobs add column if not exists disallowed_tools text[];
+alter table brainy_job_runs add column if not exists report text;
+alter table brainy_job_runs add column if not exists transcript_path text;
+alter table brainy_job_runs add column if not exists permission_denials jsonb;
 
 create index if not exists idx_brainy_job_runs_job_started
   on brainy_job_runs (job_id, started_at desc);
@@ -320,6 +334,30 @@ alter table brainy_job_runs enable row level security;
 
 drop policy if exists "Users manage own brainy_job_runs" on brainy_job_runs;
 create policy "Users manage own brainy_job_runs" on brainy_job_runs
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+----------------------------------------------------------------------
+-- brainy_run_events  (audit trail: every CLI write made during a job run)
+----------------------------------------------------------------------
+create table if not exists brainy_run_events (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) not null,
+  run_id uuid references brainy_job_runs(id) on delete cascade not null,
+  job_name text,
+  action text not null,
+  target_type text not null,
+  target text,
+  detail text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_brainy_run_events_run on brainy_run_events (run_id);
+
+alter table brainy_run_events enable row level security;
+
+drop policy if exists "Users manage own brainy_run_events" on brainy_run_events;
+create policy "Users manage own brainy_run_events" on brainy_run_events
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 

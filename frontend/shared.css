@@ -289,3 +289,25 @@ button:active {
   outline: 2px solid var(--terracotta);
   outline-offset: 2px;
 }
+
+/* ── Scheduler health (frontend/health.js) ───── */
+.health-banner a {
+  color: var(--warn-accent);
+  margin-left: 0.35rem;
+}
+
+.nav-badge {
+  display: inline-block;
+  min-width: 1.1rem;
+  margin-left: 0.3rem;
+  padding: 0 0.3rem;
+  border-radius: 9px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+  color: var(--paper-white);
+}
+
+.nav-badge-alert { background: var(--warn-accent); }
+.nav-badge-new { background: var(--terracotta); }

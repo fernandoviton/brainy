@@ -22,7 +22,7 @@ read-only at `browse/jobs/`.
    │ backend/scheduler-host.js │ real clock, pids, hostname  │
    │ backend/scheduler.js      │ decide what runs (pure)     │
    │ backend/claude-usage.js   │ read plan usage             │
-   │ backend/job-runner.js     │ spawn the job, heartbeat    │
+   │ backend/job-runner.js     │ precheck, spawn, transcript │
    └───────────────────────────┼─────────────────────────────┘
                                │ storage-supabase.js
                                ▼
@@ -90,6 +90,73 @@ The assistant maps plain requests to `job run`:
 Without `--now`, or from a machine that isn't the scheduler host, the request waits for the next
 timer tick (15 minutes at most).
 
+### Prechecks: skipping the LLM when there's nothing to do
+
+A job can have a `precheck`: a cheap shell command that runs before the job.
+
+| Precheck exit | Meaning | What happens |
+|---|---|---|
+| `0` | there's work | the job runs |
+| `10` | nothing to do | **skipped**: no run row, no LLM call; the job is stamped `last_status = skipped` and counts as a success for starvation |
+| anything else | the precheck is broken (e.g. auth expired) | recorded as a **failed** run, so it can't silently look healthy forever |
+
+For example, hourly capture processing uses `node backend/cli.js capture pending` as its precheck,
+which exits 10 when there are no unprocessed captures. Most hours it costs one Supabase query and no
+model call.
+
+### Tool allowlists for agent jobs
+
+What an agent job may do is enforced by Claude Code's permission system, not by its prompt:
+
+- `permission_mode` is always passed explicitly (default: `default`). A user-level setting can
+  never widen what a job may do.
+- `allowed_tools` (`--allowedTools`): tools the job may use without approval, including patterns
+  like `Bash(node backend/cli.js todo create:*)`. In `default` mode, any other tool that needs
+  approval is **denied**, because nobody is there to approve it.
+- `disallowed_tools` (`--disallowedTools`): tools removed outright. Use it for anything dangerous
+  that is always available, e.g. every Gmail tool except read and label.
+
+Calls that were denied are recorded on the run (`permission_denials`) and shown on the Activity page.
+A job that keeps hitting denials needs either a wider allowlist or a narrower prompt.
+
+## Observability
+
+Agent jobs are only worth keeping if you can judge their results. Each agent run records:
+
+| What | Where | Written by |
+|---|---|---|
+| **Report**: the agent's final message (markdown) | `brainy_job_runs.report` | the agent |
+| **Audited actions**: every Brainy write the CLI made during the run (TODO create/update/archive, knowledge upsert, capture process, ...) | `brainy_run_events` | **the CLI**, not the agent: the job runner sets `BRAINY_RUN_ID`, and the CLI logs each write under it |
+| **Agent-reported actions** the CLI can't see (e.g. Gmail labels) | `brainy_run_events`, via `job log-event` | the agent |
+| **Transcript**: the full `stream-json` session | `brainy_files/<user>/job-runs/<run id>.jsonl` | the job runner |
+| **Cost**: plan usage before and after | `usage_before` / `usage_after` | the tick |
+| **Blocked tool calls** | `permission_denials` | Claude Code |
+
+Because the CLI writes the audited actions, a report can be checked against what actually happened.
+
+You see this in two places:
+
+- **The Activity page** (`browse/activity/`): reports, newest first. Each one shows its audited
+  actions (linked to the TODOs, knowledge and captures it touched), its cost, blocked calls, and a
+  transcript link. Reports newer than your last visit are marked new, and the **Activity** nav link
+  shows the unread count.
+- **The session-start digest**: a SessionStart hook (`.claude/hooks/agent_digest.js`) summarizes
+  the reports since your last session on that machine, e.g. "email-triage: 1 run, created 2 TODOs
+  (...)". It's shown to you and given to the assistant, which can follow up. It does nothing inside
+  an agent job's own session.
+
+Feedback on reports goes through chat. The assistant records it in the job's TODO, and that history
+is what a promotion or demotion decision rests on.
+
+### Coding work: `[agent-ready]` briefs
+
+Agents that find coding work, such as capture processing or the proactive review, don't attempt
+it. They create a TODO whose summary starts with `[agent-ready]` and whose notes contain an
+`## Agent brief`: repo, goal, context, acceptance criteria, and open questions. When you say
+"start the ready coding work", the assistant launches one coding session per brief in its own git
+worktree. You review the brief before any code is written, and the brief format stays the same if
+this is automated later.
+
 ## Plan usage
 
 `backend/claude-usage.js` reads the same numbers Claude Code's `/usage` shows. It calls
@@ -127,31 +194,24 @@ its threshold:
 
 Jobs that have never succeeded count from `created_at`. Disabled jobs are never starved.
 Starvation shows up in `job list`, `scheduler status`, the tick's output, the web page, and
-the heartbeat (below).
+the site-wide health banner (below).
 
-## Dead man's switch (heartbeat)
+## Dead man's switch (in the web UI)
 
-A scheduler can't report that it has stopped running. A **dead man's switch** is an external
-service that expects a ping on a schedule and **alerts you when the pings stop**. That catches
-the failures the scheduler can't report itself: the host is off, the timer is disabled, the
-network is down, or the auth has expired.
+A scheduler can't report that it has stopped running. A **dead man's switch** is the opposite of an
+alarm: it raises a warning when an expected sign of life *stops* arriving. Here, the sign of life is
+`brainy_scheduler_state.last_tick_at`, which every tick updates.
 
-Set `SCHEDULER_HEARTBEAT_URL` in `.env` to a healthchecks.io-style check URL; the free tier is
-enough. Configure the check with a 15-minute period and a grace period of an hour or so. Every
-tick pings:
+`frontend/health.js` runs on **every page** of the web UI once you're signed in. It shows a banner,
+and a count on the **Jobs** nav link, when:
 
-- `<url>` when nothing is starved
-- `<url>/fail`, with the starved jobs in the body, when something is starved, and also when the
-  tick itself crashes
+- jobs exist but the scheduler has **never ticked**, or **hasn't ticked for over an hour** (the
+  host is off, the timer is disabled, the network is down, or auth has expired)
+- any job is **starved**
+- any enabled job's **last run failed** or timed out
 
-So one check covers the scheduler being down, a job silently not running, and a job failing
-repeatedly. If the URL isn't set, the heartbeat is off.
-
-A tick pings when it *finishes*, so set the check's grace period longer than your longest job's
-`timeout_minutes`. Otherwise a long agent run looks like a missed ping.
-
-The web page shows its own version of this. If the last tick is more than an hour old, it shows a
-warning banner that nothing on the page is current.
+It uses no external service. The limitation: a web page can't push anything, so you only see it
+when you open Brainy. The session-start digest (below) covers chat sessions.
 
 ## Concurrency, crashes and shutdowns
 
@@ -173,7 +233,7 @@ for runs still marked `running`:
 An abandoned run leaves `last_run_at` unchanged, so the job counts as not run yet and **retries on
 the next tick**. A run that *failed* does update `last_run_at`. Scheduled jobs wait for their next
 fire rather than retrying every 15 minutes. A job that keeps failing ends up starved, and the
-heartbeat alerts on it.
+health banner flags it.
 
 On shutdown, systemd stops the whole service cgroup, including the job. `Persistent=true` on the
 timer runs a missed tick shortly after boot, and that tick abandons the interrupted run and retries
@@ -198,9 +258,10 @@ isn't backed up.
 
 ## Security notes
 
-- Agent jobs run unattended. With the default `permission_mode`, `claude -p` refuses any tool call
-  that would need approval. Set `permission_mode` (for example `bypassPermissions`) per job, and
-  only on hosts where that's acceptable.
+- Agent jobs run unattended. Give each one the narrowest `allowed_tools` that does the job, and put
+  every tool that could reach outside Brainy (sending mail, deleting, publishing) in
+  `disallowed_tools`. Avoid `bypassPermissions` for jobs that read untrusted input such as email,
+  because the content of an email could steer the agent.
 - Prompts, commands and output tails are stored in Supabase (protected by RLS, readable only by
   you) and shown on the web page. Keep secrets out of them; read secrets from the host's
   environment or files instead.
@@ -215,7 +276,6 @@ isn't backed up.
    admin).
 4. Install the timer: `node scripts/install-scheduler.js`. `--dry-run` prints the units without
    installing them; `--uninstall` removes them.
-5. Optionally, set `SCHEDULER_HEARTBEAT_URL` in `.env`.
 6. Create jobs, for example:
 
    ```bash

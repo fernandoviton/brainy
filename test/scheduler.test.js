@@ -71,6 +71,8 @@ describe('validateJob', () => {
     [{ runs_per_cycle: -1 }, 'runs_per_cycle'],
     [{ starvation_hours: 0 }, 'starvation_hours'],
     [{ permission_mode: 'yolo' }, 'permission_mode'],
+    [{ allowed_tools: 'Bash' }, 'allowed_tools'],
+    [{ disallowed_tools: [''] }, 'disallowed_tools'],
   ])('rejects %p', (overrides, msg) => {
     expect(() => validateJob(job(overrides))).toThrow(msg);
   });
@@ -302,6 +304,8 @@ describe('runTick', () => {
         return { id: `run-${j.name}`, job_id: j.id, started_at: NOW.toISOString(), reason };
       }),
       finishJobRun: jest.fn(async (r, result) => { calls.push(['finish', r.id, result.status]); }),
+      markJobSkipped: jest.fn(async (j) => { calls.push(['skipped', j.name]); }),
+      uploadRunTranscript: jest.fn(async (r) => `u/job-runs/${r.id}.jsonl`),
       updateJobNextRun: jest.fn().mockResolvedValue(),
       ...overrides.storage,
     };
@@ -310,7 +314,8 @@ describe('runTick', () => {
       storage,
       probeUsage: jest.fn().mockResolvedValue(usage()),
       runJob: jest.fn().mockResolvedValue({ status: 'succeeded', exit_code: 0, output_tail: 'ok' }),
-      heartbeat: jest.fn().mockResolvedValue(),
+      runPrecheck: jest.fn().mockResolvedValue({ outcome: 'run' }),
+      removeFile: jest.fn(),
       now: () => NOW,
       host: 'vm',
       pid: 1,
@@ -327,6 +332,67 @@ describe('runTick', () => {
     const result = await runTick(d);
     expect(d.calls).toEqual([['start', 'j1', 'schedule'], ['finish', 'run-j1', 'succeeded']]);
     expect(result.ran).toEqual([{ name: 'j1', reason: 'schedule', status: 'succeeded' }]);
+  });
+
+  test('passes the run id to the job (so its CLI writes are audited)', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-30 * HOUR) })]);
+    await runTick(d);
+    expect(d.runJob).toHaveBeenCalledWith(expect.objectContaining({ name: 'j1' }), { runId: 'run-j1' });
+  });
+
+  test('precheck "nothing to do" skips the job without a run row or an LLM call', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-30 * HOUR), precheck: 'node backend/cli.js capture pending' })]);
+    d.runPrecheck.mockResolvedValue({ outcome: 'skip' });
+    const result = await runTick(d);
+    expect(d.calls).toEqual([['skipped', 'j1']]);
+    expect(d.runJob).not.toHaveBeenCalled();
+    expect(result.ran).toEqual([{ name: 'j1', reason: 'schedule', status: 'skipped' }]);
+    expect(result.starved).toEqual([]);
+  });
+
+  test('precheck "go" runs the job', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-30 * HOUR), precheck: 'true' })]);
+    await runTick(d);
+    expect(d.runJob).toHaveBeenCalled();
+  });
+
+  test('a broken precheck is a recorded failure, not a silent skip', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-30 * HOUR), precheck: 'x' })]);
+    d.runPrecheck.mockResolvedValue({ outcome: 'error', exit_code: 1, output_tail: 'Invalid Refresh Token' });
+    await runTick(d);
+    expect(d.runJob).not.toHaveBeenCalled();
+    expect(d.calls).toEqual([['start', 'j1', 'schedule'], ['finish', 'run-j1', 'failed']]);
+    expect(d.storage.finishJobRun.mock.calls[0][1].output_tail).toMatch(/precheck failed.*Invalid Refresh Token/s);
+  });
+
+  test('uploads the transcript, stores the report and permission denials, removes the local file', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([capJob()]);
+    d.runJob.mockResolvedValue({
+      status: 'succeeded', exit_code: 0, output_tail: '', report: '## Done', transcript_file: '/tmp/t.jsonl',
+      permission_denials: [{ tool_name: 'mcp__x__send' }],
+    });
+    await runTick(d);
+    expect(d.storage.uploadRunTranscript).toHaveBeenCalledWith(expect.objectContaining({ id: 'run-j1' }), '/tmp/t.jsonl');
+    const finished = d.storage.finishJobRun.mock.calls[0][1];
+    expect(finished).toMatchObject({ report: '## Done', transcript_path: 'u/job-runs/run-j1.jsonl', permission_denials: [{ tool_name: 'mcp__x__send' }] });
+    expect(d.removeFile).toHaveBeenCalledWith('/tmp/t.jsonl');
+  });
+
+  test('a transcript upload failure does not fail the run', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([capJob()]);
+    d.runJob.mockResolvedValue({ status: 'succeeded', exit_code: 0, output_tail: '', report: 'r', transcript_file: '/tmp/t.jsonl' });
+    d.storage.uploadRunTranscript.mockRejectedValue(new Error('quota'));
+    await runTick(d);
+    const finished = d.storage.finishJobRun.mock.calls[0][1];
+    expect(finished.status).toBe('succeeded');
+    expect(finished.transcript_path).toBeNull();
+    expect(finished.output_tail).toMatch(/transcript upload failed: quota/);
   });
 
   test('abandons crashed runs before planning', async () => {
@@ -397,19 +463,6 @@ describe('runTick', () => {
     d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-1 * HOUR), cron: '*/15 * * * *' })]);
     await runTick(d);
     expect(d.storage.updateJobNextRun).toHaveBeenCalledWith('j1', '2026-10-20T12:15:00.000Z');
-  });
-
-  test('heartbeat: ok when nothing is starved', async () => {
-    const d = deps();
-    await runTick(d);
-    expect(d.heartbeat).toHaveBeenCalledWith({ ok: true, message: expect.any(String) });
-  });
-
-  test('heartbeat: fail and list the starved jobs', async () => {
-    const d = deps();
-    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-1 * HOUR), last_success_at: iso(-100 * HOUR) })]);
-    await runTick(d);
-    expect(d.heartbeat).toHaveBeenCalledWith({ ok: false, message: expect.stringContaining('j1') });
   });
 
   test('re-reads usage after an agent run to record what it cost', async () => {

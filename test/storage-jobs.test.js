@@ -11,7 +11,7 @@ function script(...results) {
   mockSupabase.supabase.from.mockImplementation((table) => {
     const result = results[chains.length] || { data: [], error: null };
     const chain = {};
-    for (const m of ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'neq', 'in', 'gte', 'lte', 'order', 'limit']) {
+    for (const m of ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'neq', 'in', 'gte', 'lte', 'order', 'limit', 'not']) {
       chain[m] = jest.fn().mockReturnValue(chain);
     }
     chain.single = jest.fn(() => Promise.resolve(result));
@@ -158,6 +158,49 @@ describe('job runs', () => {
     await storage.listJobRuns({ jobName: 'nightly-backup', limit: 5 });
     expect(chains[0].eq).toHaveBeenCalledWith('job_name', 'nightly-backup');
     expect(chains[0].limit).toHaveBeenCalledWith(5);
+  });
+});
+
+describe('precheck skip, transcripts, events, reports', () => {
+  test('markJobSkipped stamps the job as a healthy no-op run', async () => {
+    const chains = script(ok(null));
+    await storage.markJobSkipped(existingJob);
+    const u = chains[0].update.mock.calls[0][0];
+    expect(u).toMatchObject({ last_status: 'skipped' });
+    expect(u.last_run_at).toBe(u.last_success_at);
+    expect(chains[0].eq).toHaveBeenCalledWith('id', 'job-1');
+  });
+
+  test('finishJobRun stores report, transcript path and permission denials', async () => {
+    const chains = script(ok(null), ok(null));
+    await storage.finishJobRun({ id: 'r', job_id: 'job-1', started_at: 's' }, {
+      status: 'succeeded', exit_code: 0, output_tail: '', report: '## R', transcript_path: 'u/job-runs/r.jsonl',
+      permission_denials: [{ tool_name: 'X' }],
+    });
+    expect(chains[0].update).toHaveBeenCalledWith(expect.objectContaining({
+      report: '## R', transcript_path: 'u/job-runs/r.jsonl', permission_denials: [{ tool_name: 'X' }],
+    }));
+  });
+
+  test('recordRunEvent inserts an audit row', async () => {
+    const chains = script(ok(null));
+    await storage.recordRunEvent({ runId: 'r', jobName: 'triage', action: 'create', targetType: 'todo', target: 'fix-x', detail: 'd' });
+    expect(chains[0].table).toBe('brainy_run_events');
+    expect(chains[0].insert).toHaveBeenCalledWith({
+      user_id: 'test-user-id', run_id: 'r', job_name: 'triage', action: 'create', target_type: 'todo', target: 'fix-x', detail: 'd',
+    });
+  });
+
+  test('listReports returns runs that have a report, newest first, with their events', async () => {
+    const chains = script(
+      ok([{ id: 'r1', job_name: 'triage', report: 'x', started_at: '2026-10-17T10:00:00Z' }]),
+      ok([{ run_id: 'r1', action: 'create', target_type: 'todo', target: 'a' }]),
+    );
+    const reports = await storage.listReports({ since: '2026-10-16T00:00:00Z', limit: 10 });
+    expect(chains[0].not).toHaveBeenCalledWith('report', 'is', null);
+    expect(chains[0].gte).toHaveBeenCalledWith('finished_at', '2026-10-16T00:00:00Z');
+    expect(chains[1].in).toHaveBeenCalledWith('run_id', ['r1']);
+    expect(reports[0].events).toEqual([{ run_id: 'r1', action: 'create', target_type: 'todo', target: 'a' }]);
   });
 });
 

@@ -113,3 +113,12 @@ describe('upload guard coverage', () => {
     expect(bucket.upload).not.toHaveBeenCalled();
   });
 });
+
+describe('uploadRunTranscript', () => {
+  test('uploads under <user>/job-runs/<run id>.jsonl and returns the key', async () => {
+    const file = tmpFile('t.jsonl', '{"type":"result"}\n');
+    const key = await storage.uploadRunTranscript({ id: 'run-123' }, file);
+    expect(key).toBe(`${USER}/job-runs/run-123.jsonl`);
+    expect(bucket.upload).toHaveBeenCalledWith(key, expect.any(Buffer), expect.objectContaining({ contentType: 'application/x-ndjson' }));
+  });
+});

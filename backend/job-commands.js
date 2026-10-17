@@ -22,7 +22,26 @@ const JOB_FIELD_FLAGS = {
   maxSessionPct: { column: 'max_session_pct', type: 'int' },
   runsPerCycle: { column: 'runs_per_cycle', type: 'int' },
   starvationHours: { column: 'starvation_hours', type: 'int', clearable: true },
+  precheck: { column: 'precheck', type: 'text', clearable: true },
+  allowedTools: { column: 'allowed_tools', type: 'list', clearable: true },
+  disallowedTools: { column: 'disallowed_tools', type: 'list', clearable: true },
 };
+
+// Split a comma-separated tool list, ignoring commas inside a pattern's
+// parentheses: "Bash(git diff:*),Read" -> ["Bash(git diff:*)", "Read"].
+function splitToolList(text) {
+  const out = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of String(text)) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map((t) => t.trim()).filter(Boolean);
+}
 
 const FLAG_NAMES = Object.keys(JOB_FIELD_FLAGS);
 
@@ -38,7 +57,9 @@ function jobFieldsFromArgs(args) {
     const v = args[flag];
     if (v === undefined) continue;
     if (v === '' && spec.clearable) { fields[spec.column] = null; continue; }
-    if (spec.type === 'int') {
+    if (spec.type === 'list') {
+      fields[spec.column] = splitToolList(v);
+    } else if (spec.type === 'int') {
       if (!/^\d+$/.test(String(v))) throw new Error(`${kebab(flag)} must be a whole number (got "${v}")`);
       fields[spec.column] = Number(v);
     } else {
@@ -81,6 +102,9 @@ function formatJobDetail(job, now = new Date()) {
     `Kind: ${job.kind} | Trigger: ${describeTrigger(job)} | Priority: ${job.priority}`,
     `Timeout: ${job.timeout_minutes}m${job.workdir ? ` | Workdir: ${job.workdir}` : ''}`
       + `${job.model ? ` | Model: ${job.model}` : ''}${job.permission_mode ? ` | Permission mode: ${job.permission_mode}` : ''}`,
+    job.precheck ? `Precheck: $ ${job.precheck} (exit 10 = nothing to do)` : null,
+    job.allowed_tools && job.allowed_tools.length ? `Allowed tools: ${job.allowed_tools.join(', ')}` : null,
+    job.disallowed_tools && job.disallowed_tools.length ? `Disallowed tools: ${job.disallowed_tools.join(', ')}` : null,
     `Last run: ${fmtTime(job.last_run_at)} (${job.last_status || 'n/a'}) | Last success: ${fmtTime(job.last_success_at)}`,
     job.trigger === 'schedule' ? `Next run: ${fmtTime(job.next_run_at)}` : null,
     job.run_requested_at && (!job.last_run_at || job.run_requested_at > job.last_run_at)
@@ -100,6 +124,41 @@ function formatRun(run) {
     + `${run.exit_code !== null && run.exit_code !== undefined ? ` exit=${run.exit_code}` : ''} (${run.host || '?'})`;
 }
 
+function formatReport(r) {
+  const lines = [`## ${r.job_name} — ${fmtTime(r.finished_at || r.started_at)} [${r.status}]`];
+  if (r.events && r.events.length) {
+    lines.push('Actions (audited):');
+    for (const e of r.events) {
+      lines.push(`  - ${e.action} ${e.target_type} ${e.target || ''}${e.detail ? ` — ${e.detail}` : ''}`);
+    }
+  }
+  if (r.permission_denials && r.permission_denials.length) {
+    lines.push(`Blocked tool calls: ${r.permission_denials.map((d) => d.tool_name).join(', ')}`);
+  }
+  lines.push('', r.report || '(no report)', '');
+  return lines.join('\n');
+}
+
+// One-paragraph digest of reports for the session-start hook.
+function formatDigest(reports) {
+  if (!reports.length) return null;
+  const byJob = {};
+  for (const r of reports) (byJob[r.job_name] = byJob[r.job_name] || []).push(r);
+  const parts = Object.entries(byJob).map(([job, rs]) => {
+    const events = rs.flatMap((r) => r.events || []);
+    const created = events.filter((e) => e.target_type === 'todo' && e.action === 'create').map((e) => e.target);
+    const updated = new Set(events.filter((e) => e.target_type === 'todo' && e.action === 'update').map((e) => e.target));
+    const failed = rs.filter((r) => r.status !== 'succeeded').length;
+    const bits = [`${rs.length} run${rs.length > 1 ? 's' : ''}`];
+    if (created.length) bits.push(`created ${created.length} TODO${created.length > 1 ? 's' : ''} (${created.join(', ')})`);
+    if (updated.size) bits.push(`updated ${updated.size} TODO${updated.size > 1 ? 's' : ''}`);
+    if (failed) bits.push(`${failed} FAILED`);
+    return `${job}: ${bits.join(', ')}`;
+  });
+  return `Agent activity since your last session — ${parts.join('; ')}. `
+    + 'See the Activity page or `node backend/cli.js job reports`.';
+}
+
 function formatUsage(usage) {
   if (!usage || !usage.weekly) return 'Usage: unknown';
   return `Usage: session ${usage.session.percent}% (resets ${fmtTime(usage.session.resets_at)}) · `
@@ -116,4 +175,7 @@ module.exports = {
   formatJobDetail,
   formatRun,
   formatUsage,
+  formatReport,
+  formatDigest,
+  splitToolList,
 };

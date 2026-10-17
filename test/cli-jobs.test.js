@@ -44,6 +44,10 @@ const mockStorage = {
   countCycleRuns: jest.fn(),
   getSchedulerState: jest.fn(),
   saveSchedulerState: jest.fn(),
+  markJobSkipped: jest.fn(),
+  uploadRunTranscript: jest.fn(),
+  recordRunEvent: jest.fn(),
+  listReports: jest.fn(),
 };
 
 jest.mock('../backend/storage', () => ({
@@ -57,6 +61,16 @@ const mockHost = {
 };
 
 jest.mock('../backend/scheduler-host', () => mockHost);
+
+const mockCaptureService = {
+  listCapturesWithMedia: jest.fn(),
+  getCapture: jest.fn(),
+  processCapture: jest.fn(),
+  deleteCapture: jest.fn(),
+  getCaptureMediaUrls: jest.fn(),
+};
+
+jest.mock('../backend/capture-service', () => mockCaptureService);
 
 const { main } = require('../backend/cli.js');
 
@@ -73,8 +87,11 @@ function runCLI(args) {
   process.argv = ['node', 'backend/cli.js', ...args];
   console.log = (...a) => output.push(a.join(' '));
   console.error = (...a) => errors.push(a.join(' '));
+  // A real process.exit stops at the first call; keep that code rather than the
+  // exit(1) from main's catch that the thrown sentinel triggers.
+  let exited = false;
   process.exit = (code) => {
-    exitCode = code;
+    if (!exited) { exitCode = code; exited = true; }
     throw new Error(`EXIT_${code}`);
   };
 
@@ -98,6 +115,8 @@ const JOB = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete process.env.BRAINY_RUN_ID;
+  delete process.env.BRAINY_JOB_NAME;
 });
 
 describe('job create', () => {
@@ -326,5 +345,128 @@ describe('flag validation covers the new commands', () => {
     const { output, exitCode } = await runCLI(['job', '--help']);
     expect(exitCode).toBe(0);
     expect(output.join('\n')).toContain('run <name> | --trigger');
+  });
+});
+
+describe('job tool lists and precheck', () => {
+  test('--allowed-tools splits on commas but not inside a pattern\'s parentheses', async () => {
+    mockStorage.updateJob.mockResolvedValue(JOB);
+    await runCLI(['job', 'update', 'triage', '--allowed-tools', 'Bash(node backend/cli.js todo *),Read, mcp__g__label_thread']);
+    expect(mockStorage.updateJob).toHaveBeenCalledWith('triage', {
+      allowed_tools: ['Bash(node backend/cli.js todo *)', 'Read', 'mcp__g__label_thread'],
+    });
+  });
+
+  test('an empty --disallowed-tools clears the list', async () => {
+    mockStorage.updateJob.mockResolvedValue(JOB);
+    await runCLI(['job', 'update', 'triage', '--disallowed-tools', '']);
+    expect(mockStorage.updateJob).toHaveBeenCalledWith('triage', { disallowed_tools: null });
+  });
+
+  test('--precheck sets the precheck command', async () => {
+    mockStorage.updateJob.mockResolvedValue(JOB);
+    await runCLI(['job', 'update', 'triage', '--precheck', 'node backend/cli.js capture pending']);
+    expect(mockStorage.updateJob).toHaveBeenCalledWith('triage', { precheck: 'node backend/cli.js capture pending' });
+  });
+});
+
+describe('capture pending (precheck)', () => {
+  test('exits 0 when there are unprocessed captures', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    const { exitCode, output } = await runCLI(['capture', 'pending']);
+    expect(exitCode).toBe(0);
+    expect(output.join('\n')).toContain('2 unprocessed');
+  });
+
+  test('exits 10 (nothing to do) when there are none', async () => {
+    mockCaptureService.listCapturesWithMedia.mockResolvedValue([]);
+    const { exitCode } = await runCLI(['capture', 'pending']);
+    expect(exitCode).toBe(10);
+  });
+});
+
+describe('audit trail during job runs', () => {
+  test('a CLI write inside a run records an event', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    process.env.BRAINY_JOB_NAME = 'capture-processing';
+    mockStorage.createTodo.mockResolvedValue({ name: 'fix-x', status: 'inbox' });
+    await runCLI(['todo', 'create', '--name', 'fix-x', '--summary', 'Fix X']);
+    expect(mockStorage.recordRunEvent).toHaveBeenCalledWith({
+      runId: 'run-9', jobName: 'capture-processing', action: 'create', targetType: 'todo', target: 'fix-x', detail: 'Fix X',
+    });
+  });
+
+  test('todo update records which fields changed', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    mockStorage.updateTodo.mockResolvedValue({ name: 'fix-x', status: 'active' });
+    await runCLI(['todo', 'update', 'fix-x', '--status', 'active', '--priority', 'P1']);
+    expect(mockStorage.recordRunEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'update', targetType: 'todo', target: 'fix-x', detail: 'status, priority',
+    }));
+  });
+
+  test('knowledge upsert and capture process are audited', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainy-audit-'));
+    const file = path.join(dir, 'k.md');
+    fs.writeFileSync(file, '# K');
+    mockStorage.upsertKnowledge.mockResolvedValue({ path: 'a/b.md' });
+    mockCaptureService.processCapture.mockResolvedValue({ id: 'cap-1' });
+    await runCLI(['knowledge', 'upsert', 'a/b.md', '--file', file]);
+    await runCLI(['capture', 'process', 'cap-1']);
+    const actions = mockStorage.recordRunEvent.mock.calls.map((c) => [c[0].action, c[0].targetType, c[0].target]);
+    expect(actions).toEqual([['upsert', 'knowledge', 'a/b.md'], ['process', 'capture', 'cap-1']]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('no run id -> no audit (interactive use)', async () => {
+    mockStorage.createTodo.mockResolvedValue({ name: 'fix-x', status: 'inbox' });
+    await runCLI(['todo', 'create', '--name', 'fix-x']);
+    expect(mockStorage.recordRunEvent).not.toHaveBeenCalled();
+  });
+
+  test('a failed audit write warns but does not fail the command', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    mockStorage.createTodo.mockResolvedValue({ name: 'fix-x', status: 'inbox' });
+    mockStorage.recordRunEvent.mockRejectedValue(new Error('offline'));
+    const { exitCode, errors } = await runCLI(['todo', 'create', '--name', 'fix-x']);
+    expect(exitCode).toBe(0);
+    expect(errors.join('\n')).toMatch(/audit event not recorded: offline/);
+  });
+
+  test('job log-event records an agent-reported action (e.g. a Gmail label)', async () => {
+    process.env.BRAINY_RUN_ID = 'run-9';
+    process.env.BRAINY_JOB_NAME = 'email-triage';
+    await runCLI(['job', 'log-event', '--action', 'label ai-done', '--type', 'email', '--target', 'Jane Doe: dinner Sat?', '--detail', 'human-sent; replied already']);
+    expect(mockStorage.recordRunEvent).toHaveBeenCalledWith({
+      runId: 'run-9', jobName: 'email-triage', action: 'label ai-done', targetType: 'email',
+      target: 'Jane Doe: dinner Sat?', detail: 'human-sent; replied already',
+    });
+  });
+
+  test('job log-event outside a run is an error', async () => {
+    const { exitCode, errors } = await runCLI(['job', 'log-event', '--action', 'x', '--type', 'email', '--target', 't']);
+    expect(exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/BRAINY_RUN_ID/);
+  });
+});
+
+describe('job reports', () => {
+  test('passes filters and prints each report with its events', async () => {
+    mockStorage.listReports.mockResolvedValue([{
+      id: 'r1', job_name: 'email-triage', status: 'succeeded', started_at: '2026-10-17T14:00:00Z', finished_at: '2026-10-17T14:03:00Z',
+      report: '## Summary\nClosed 12 threads.', events: [{ action: 'create', target_type: 'todo', target: 'reply-to-jane' }],
+    }]);
+    const { output } = await runCLI(['job', 'reports', '--since', '2026-10-16T00:00:00Z', '--job', 'email-triage', '--limit', '5']);
+    expect(mockStorage.listReports).toHaveBeenCalledWith({ since: '2026-10-16T00:00:00Z', jobName: 'email-triage', limit: 5 });
+    const text = output.join('\n');
+    expect(text).toContain('email-triage');
+    expect(text).toContain('create todo reply-to-jane');
+    expect(text).toContain('Closed 12 threads.');
+  });
+
+  test('an unparseable --since is rejected', async () => {
+    const { exitCode } = await runCLI(['job', 'reports', '--since', 'yesterday-ish']);
+    expect(exitCode).toBe(1);
   });
 });

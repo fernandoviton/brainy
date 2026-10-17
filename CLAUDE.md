@@ -106,6 +106,16 @@ Jobs (shell commands or headless `claude -p` agent runs) are stored in Supabase 
 
   `--now` starts a tick right away on the scheduler host (Linux). From any other machine, the request waits for the next timer tick (within 15 minutes). Afterwards, report which jobs were queued, and check `job runs` once they finish.
 - **Starvation:** a job is starved when it hasn't *succeeded* within twice its cron gap, or within 2 weeks for capacity jobs (override with `--starvation-hours`). Mention starved jobs when they appear in `job list` / `scheduler status`.
+- **Prechecks and tools:**
+  - `--precheck <cmd>` runs first. Exit 10 means nothing to do: the job is skipped with no LLM call (e.g. `capture pending`).
+  - `--allowed-tools` / `--disallowed-tools` are the real limits on an agent job; its prompt is not.
+- **Agent reports.** `job reports [--since <iso>] [--job <name>]` lists each agent run's report together with its **audited actions**. The CLI records every write made during a run, so the actions don't depend on the agent's own account.
+  - The SessionStart digest summarizes new reports. When it appears, offer to go through them, and flag any failed runs or blocked tool calls.
+  - When the user gives feedback on an agent's results, record it in that agent's TODO, under `agent-job-scheduler` until each agent has its own. That record is the basis for promoting or demoting the agent.
+- **`[agent-ready]` coding briefs.** Agents don't write code. They create TODOs whose summary starts with `[agent-ready]` and whose notes contain an `## Agent brief`.
+  - When the user says "start the ready coding work" (or names one), find those TODOs with `todo list --all --format json`.
+  - For each, launch a T3 coding thread in its own worktree using the brief, then update the TODO: drop the prefix, and note the thread in its notes.
+  - In a session without T3 tools, show the briefs instead.
 
 ### TODO Statuses
 - `inbox` — Newly captured, not yet triaged

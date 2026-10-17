@@ -1086,7 +1086,9 @@ async function startJobRun({ job, reason, host, pid, usage }) {
 // Close a run and stamp the job's last_* columns. last_run_at is the START of
 // the last completed run (the scheduler measures cron fires from it);
 // last_success_at only moves on success, which is what starvation checks.
-async function finishJobRun(run, { status, exit_code, output_tail, usage_after }) {
+async function finishJobRun(run, {
+  status, exit_code, output_tail, usage_after, report, transcript_path, permission_denials,
+}) {
   const userId = await getUserId();
   const finishedAt = new Date().toISOString();
   const { error } = await supabase.from(RUNS).update({
@@ -1095,6 +1097,9 @@ async function finishJobRun(run, { status, exit_code, output_tail, usage_after }
     exit_code: exit_code ?? null,
     output_tail: output_tail || null,
     usage_after: usage_after || null,
+    report: report || null,
+    transcript_path: transcript_path || null,
+    permission_denials: permission_denials || null,
   }).eq('user_id', userId).eq('id', run.id);
   if (error) throw error;
 
@@ -1102,6 +1107,60 @@ async function finishJobRun(run, { status, exit_code, output_tail, usage_after }
   if (status === 'succeeded') jobUpdate.last_success_at = finishedAt;
   const { error: jobErr } = await supabase.from(JOBS).update(jobUpdate).eq('user_id', userId).eq('id', run.job_id);
   if (jobErr) throw jobErr;
+}
+
+// The job's precheck found nothing to do: a healthy no-op. No run row (an
+// hourly "nothing new" would bury the real runs), just the job's bookkeeping.
+async function markJobSkipped(job) {
+  const userId = await getUserId();
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase.from(JOBS).update({
+    last_run_at: nowIso,
+    last_finished_at: nowIso,
+    last_status: 'skipped',
+    last_success_at: nowIso,
+  }).eq('user_id', userId).eq('id', job.id);
+  if (error) throw error;
+}
+
+async function uploadRunTranscript(run, filePath) {
+  const userId = await getUserId();
+  const key = `${userId}/job-runs/${run.id}.jsonl`;
+  const buffer = await require('fs').promises.readFile(filePath);
+  await uploadToStorage(key, buffer, { contentType: 'application/x-ndjson', upsert: true });
+  return key;
+}
+
+// Audit trail: written by the CLI (not the agent) for every write made while
+// BRAINY_RUN_ID is set, so a run's report can be checked against what it did.
+async function recordRunEvent({ runId, jobName, action, targetType, target, detail }) {
+  const userId = await getUserId();
+  const { error } = await supabase.from('brainy_run_events').insert({
+    user_id: userId,
+    run_id: runId,
+    job_name: jobName || null,
+    action,
+    target_type: targetType,
+    target: target || null,
+    detail: detail || null,
+  });
+  if (error) throw error;
+}
+
+// Finished runs that produced a report (agent runs), newest first, each with
+// its audit events.
+async function listReports({ since, jobName, limit = 20 } = {}) {
+  const userId = await getUserId();
+  let query = supabase.from(RUNS).select('*').eq('user_id', userId).not('report', 'is', null);
+  if (since) query = query.gte('finished_at', since);
+  if (jobName) query = query.eq('job_name', jobName);
+  const { data: runs, error } = await query.order('finished_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  if (!runs || !runs.length) return [];
+  const { data: events, error: evErr } = await supabase
+    .from('brainy_run_events').select('*').eq('user_id', userId).in('run_id', runs.map((r) => r.id));
+  if (evErr) throw evErr;
+  return runs.map((r) => ({ ...r, events: (events || []).filter((e) => e.run_id === r.id) }));
 }
 
 // A run whose process is gone (crash, shutdown). last_run_at is deliberately
@@ -1190,6 +1249,10 @@ module.exports = {
   startJobRun,
   finishJobRun,
   abandonJobRun,
+  markJobSkipped,
+  uploadRunTranscript,
+  recordRunEvent,
+  listReports,
   countCycleRuns,
   getSchedulerState,
   saveSchedulerState,

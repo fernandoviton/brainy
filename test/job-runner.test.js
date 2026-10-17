@@ -1,4 +1,7 @@
-const { runJob, buildCommand, tail, createHeartbeat } = require('../backend/job-runner');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { runJob, runPrecheck, buildCommand, tail } = require('../backend/job-runner');
 
 const base = { name: 'demo', timeout_minutes: 1 };
 
@@ -9,15 +12,27 @@ describe('buildCommand', () => {
     });
   });
 
-  test('agent jobs run claude -p with the prompt, model and permission mode', () => {
-    expect(buildCommand({ ...base, kind: 'agent', prompt: 'triage', model: 'sonnet', permission_mode: 'bypassPermissions' })).toEqual({
+  test('agent jobs stream JSON (for the transcript) with model and permission mode', () => {
+    expect(buildCommand({ ...base, kind: 'agent', prompt: 'triage', model: 'sonnet', permission_mode: 'acceptEdits' })).toEqual({
       file: 'claude',
-      args: ['-p', 'triage', '--output-format', 'text', '--model', 'sonnet', '--permission-mode', 'bypassPermissions'],
+      args: ['-p', 'triage', '--output-format', 'stream-json', '--verbose', '--model', 'sonnet', '--permission-mode', 'acceptEdits'],
     });
   });
 
-  test('agent jobs omit model/permission flags when unset', () => {
-    expect(buildCommand({ ...base, kind: 'agent', prompt: 'x' }).args).toEqual(['-p', 'x', '--output-format', 'text']);
+  test('permission mode is always explicit, so user-level settings cannot widen a job', () => {
+    expect(buildCommand({ ...base, kind: 'agent', prompt: 'x' }).args).toEqual(['-p', 'x', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'default']);
+  });
+
+  test('tool allow/deny lists are passed one pattern per argument (patterns contain spaces)', () => {
+    const { args } = buildCommand({
+      ...base, kind: 'agent', prompt: 'x',
+      allowed_tools: ['Bash(node backend/cli.js todo *)', 'mcp__gmail__label_thread'],
+      disallowed_tools: ['mcp__gmail__send_message'],
+    });
+    expect(args.slice(-5)).toEqual([
+      '--allowedTools', 'Bash(node backend/cli.js todo *)', 'mcp__gmail__label_thread',
+      '--disallowedTools', 'mcp__gmail__send_message',
+    ]);
   });
 });
 
@@ -53,6 +68,54 @@ describe('runJob', () => {
     expect(r.status).toBe('timed_out');
   }, 10000);
 
+  test('exposes BRAINY_RUN_ID when given a run id', async () => {
+    const r = await runJob({ ...base, kind: 'command', command: 'echo run=$BRAINY_RUN_ID' }, { runId: 'abc' });
+    expect(r.output_tail).toContain('run=abc');
+  });
+
+  describe('agent jobs (fake claude emitting stream-json)', () => {
+    let dir;
+    let fakeClaude;
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainy-fake-claude-'));
+      fakeClaude = path.join(dir, 'claude');
+    });
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    function writeFake(lines, exit = 0) {
+      const body = lines.map((l) => `echo '${JSON.stringify(l)}'`).join('\n');
+      fs.writeFileSync(fakeClaude, `#!/bin/bash\necho "warning on stderr" >&2\n${body}\nexit ${exit}\n`, { mode: 0o755 });
+    }
+
+    test('the final result becomes the report; the stream is kept as a transcript file', async () => {
+      writeFake([
+        { type: 'system', subtype: 'init', tools: [] },
+        { type: 'assistant', message: { content: [{ type: 'text', text: 'working' }] } },
+        { type: 'result', subtype: 'success', is_error: false, result: '## Report\nCreated 2 TODOs', permission_denials: [{ tool_name: 'Write' }] },
+      ]);
+      const r = await runJob({ ...base, kind: 'agent', prompt: 'x' }, { claudeBin: fakeClaude, transcriptDir: dir });
+      expect(r.status).toBe('succeeded');
+      expect(r.report).toBe('## Report\nCreated 2 TODOs');
+      expect(r.permission_denials).toEqual([{ tool_name: 'Write' }]);
+      expect(fs.readFileSync(r.transcript_file, 'utf8').trim().split('\n')).toHaveLength(3);
+      expect(r.output_tail).toContain('warning on stderr');
+      expect(r.output_tail).not.toContain('"type":"assistant"');
+    });
+
+    test('an error result is a failed run even with exit 0', async () => {
+      writeFake([{ type: 'result', subtype: 'error_max_turns', is_error: true, result: 'gave up' }]);
+      const r = await runJob({ ...base, kind: 'agent', prompt: 'x' }, { claudeBin: fakeClaude, transcriptDir: dir });
+      expect(r.status).toBe('failed');
+      expect(r.report).toBe('gave up');
+    });
+
+    test('no result event -> failed, report null', async () => {
+      writeFake([{ type: 'system', subtype: 'init' }], 1);
+      const r = await runJob({ ...base, kind: 'agent', prompt: 'x' }, { claudeBin: fakeClaude, transcriptDir: dir });
+      expect(r).toMatchObject({ status: 'failed', report: null });
+    });
+  });
+
   test('missing binary -> failed, not a thrown error', async () => {
     const r = await runJob({ ...base, kind: 'command', command: 'x' }, { shell: '/nonexistent/bash' });
     expect(r.status).toBe('failed');
@@ -60,24 +123,15 @@ describe('runJob', () => {
   });
 });
 
-describe('createHeartbeat', () => {
-  test('no URL -> no-op', async () => {
-    const fetchImpl = jest.fn();
-    await createHeartbeat(undefined, fetchImpl)({ ok: true, message: 'x' });
-    expect(fetchImpl).not.toHaveBeenCalled();
+describe('runPrecheck', () => {
+  const job = { ...base, kind: 'agent', prompt: 'x' };
+  test('exit 0 -> run', async () => {
+    expect((await runPrecheck({ ...job, precheck: 'exit 0' })).outcome).toBe('run');
   });
-
-  test('ok pings the URL, failure pings <url>/fail, both with the message', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({ ok: true });
-    const hb = createHeartbeat('https://hc.example/abc', fetchImpl);
-    await hb({ ok: true, message: 'fine' });
-    await hb({ ok: false, message: 'starved: x' });
-    expect(fetchImpl.mock.calls[0]).toEqual(['https://hc.example/abc', expect.objectContaining({ method: 'POST', body: 'fine' })]);
-    expect(fetchImpl.mock.calls[1][0]).toBe('https://hc.example/abc/fail');
+  test('exit 10 -> skip (nothing to do)', async () => {
+    expect((await runPrecheck({ ...job, precheck: 'exit 10' })).outcome).toBe('skip');
   });
-
-  test('a ping failure is swallowed (the dead-man side will notice)', async () => {
-    const fetchImpl = jest.fn().mockRejectedValue(new Error('offline'));
-    await expect(createHeartbeat('https://hc.example/abc', fetchImpl, () => {})({ ok: true, message: 'x' })).resolves.toBeUndefined();
+  test('anything else -> error, with output', async () => {
+    expect(await runPrecheck({ ...job, precheck: 'echo boom; exit 1' })).toMatchObject({ outcome: 'error', exit_code: 1, output_tail: expect.stringContaining('boom') });
   });
 });

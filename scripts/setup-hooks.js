@@ -46,6 +46,11 @@ function buildExpectedHooks(repoRootForwardSlash) {
             command: hookCommand(repoRootForwardSlash, 'run_backup.js'),
             timeout: 120,
           },
+          {
+            type: 'command',
+            command: hookCommand(repoRootForwardSlash, 'agent_digest.js'),
+            timeout: 15,
+          },
         ],
       },
     ],

@@ -1,0 +1,70 @@
+#filters {
+  margin-bottom: 1rem;
+}
+
+.pill {
+  cursor: pointer;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  border-radius: 16px;
+  background: var(--paper-white);
+  color: var(--ink-light);
+  border: 1px solid var(--border-light);
+}
+
+.pill.active {
+  background: var(--terracotta);
+  color: var(--cream);
+  border-color: var(--terracotta);
+}
+
+.report-new {
+  border-left: 4px solid var(--terracotta);
+}
+
+.badge-new {
+  background: var(--terracotta);
+  color: var(--paper-white);
+}
+
+.events {
+  list-style: none;
+  font-size: 0.82rem;
+  margin: 0.5rem 0;
+}
+
+.events li {
+  padding: 0.15rem 0;
+}
+
+.events a {
+  color: var(--terracotta);
+}
+
+.denials {
+  font-size: 0.8rem;
+  color: var(--warn-ink);
+  margin-bottom: 0.5rem;
+}
+
+.report-body {
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.report-body h1, .report-body h2, .report-body h3 {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  margin: 0.6rem 0 0.3rem;
+}
+
+.report-body ul, .report-body ol {
+  padding-left: 1.3rem;
+}
+
+.transcript-btn {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  width: auto;
+  padding: 0.3rem 0.7rem;
+}
