@@ -321,6 +321,17 @@ async function runTick({
 
   // 3. Plan and run, sequentially.
   const plan = planTick({ jobs, now: now(), usage: usageError ? null : usage, cycleRuns });
+  // Agent runs are measured: make sure there is a fresh "before" reading even
+  // when no capacity check needed one (e.g. a requested or scheduled run).
+  if (!usageError && plan.run.some((r) => r.job.kind === 'agent') && !usageIsFresh(usage, now())) {
+    try {
+      usage = await probeUsage();
+    } catch (err) {
+      usageError = errorMessage(err);
+      log(`usage probe failed: ${usageError}`);
+    }
+  }
+
   const ran = [];
   for (const { job, reason } of plan.run) {
     const outcome = await executeJob({ job, reason, storage, runJob, runPrecheck, removeFile, host, pid, usage });

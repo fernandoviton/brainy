@@ -465,6 +465,21 @@ describe('runTick', () => {
     expect(d.storage.updateJobNextRun).toHaveBeenCalledWith('j1', '2026-10-20T12:15:00.000Z');
   });
 
+  test('reads usage before an agent run even when no capacity check needed it (so cost is measured)', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([capJob({ run_requested_at: iso(-60e3) })]);
+    await runTick(d);
+    expect(d.storage.startJobRun.mock.calls[0][0].usage).toEqual(usage());
+    expect(d.probeUsage).toHaveBeenCalledTimes(2);
+  });
+
+  test('command jobs alone never trigger a usage read', async () => {
+    const d = deps();
+    d.storage.listJobs.mockResolvedValue([job({ last_run_at: iso(-30 * HOUR) })]);
+    await runTick(d);
+    expect(d.probeUsage).not.toHaveBeenCalled();
+  });
+
   test('re-reads usage after an agent run to record what it cost', async () => {
     const d = deps();
     d.storage.listJobs.mockResolvedValue([capJob()]);

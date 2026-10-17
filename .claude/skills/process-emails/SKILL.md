@@ -82,6 +82,7 @@ When this skill runs as the `email-triage` scheduled job (the prompt says "auton
   ```
   The CLI audits TODO and knowledge writes automatically, but it can't see Gmail, so these events are the only reliable record of what you closed.
 - **Your final message is the run report** the user reads on the Activity page and in their session digest. Use the step 5 structure, in markdown, starting with a one-line summary (e.g. "Reviewed 23 threads: 2 TODOs, 19 closed, 2 knowledge entries"). The human-sent list is mandatory, and the self-check still applies.
+- **If labeling fails with an auth or scope error** (`Insufficient scope`), stop: one failure is enough. That means the Gmail connector can't modify mail. Create no further TODOs, because without the `ai-todo` label the next run would see the same threads again. Report the error as the first line, along with the TODOs already created.
 - **When unsure, open a TODO rather than closing the thread.** A wrongly-opened TODO costs a glance. A wrongly-closed human email costs a missed person.
 
 ## Key principles
