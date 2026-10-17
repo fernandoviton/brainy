@@ -154,7 +154,7 @@ node backend/cli.js todo delete my-task
 
 ### TODO Collateral
 
-Attach files (notes, images, PDFs) to any TODO. Text files are stored inline; binary files are uploaded to Supabase Storage.
+Attach files (notes, images, PDFs) to any TODO. Text files are stored inline; binary files are uploaded to Supabase Storage. Filenames are cleaned the same way as knowledge attachments (`#` dropped, other unsafe characters become `_`); the stored name is printed.
 
 ```bash
 # List collateral for a TODO

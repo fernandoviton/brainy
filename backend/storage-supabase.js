@@ -3,6 +3,7 @@
  * Wraps Supabase queries behind the same interface as storage-file.js.
  */
 const { supabase, login } = require('./supabase-client');
+const { storageSafeFilename, assertSafeStorageKey } = require('./storage-keys');
 
 let _userId = null;
 
@@ -11,6 +12,14 @@ async function getUserId() {
   const user = await login();
   _userId = user.id;
   return _userId;
+}
+
+// Every write to brainy_files goes through here so unsafe keys are caught
+// before they reach Supabase (see storage-keys.js).
+async function uploadToStorage(storagePath, buffer, options) {
+  assertSafeStorageKey(storagePath);
+  const { error } = await supabase.storage.from('brainy_files').upload(storagePath, buffer, options);
+  if (error) throw error;
 }
 
 // ---------------------------------------------------------------------------
@@ -577,12 +586,10 @@ async function downloadMedia(storagePath) {
 
 async function uploadCaptureMedia({ captureId, filename, contentType, buffer }) {
   const userId = await getUserId();
-  const storagePath = `${userId}/captures/${captureId}/${filename}`;
-
-  const { error: uploadErr } = await supabase.storage
-    .from('brainy_files')
-    .upload(storagePath, buffer, { contentType });
-  if (uploadErr) throw uploadErr;
+  // The row keeps the display filename (convert-capture-pdfs pairs 'x.pdf' with
+  // 'x.pdf.md' by name); only the key is made safe, as the web capture page does.
+  const storagePath = `${userId}/captures/${captureId}/${storageSafeFilename(filename)}`;
+  await uploadToStorage(storagePath, buffer, { contentType });
 
   const { error: insertErr } = await supabase
     .from('brainy_capture_media')
@@ -688,7 +695,7 @@ async function addCollateral(todoName, filepath, { replace = false } = {}) {
     .single();
   if (todoErr) throw todoErr;
 
-  const filename = path.basename(filepath);
+  const filename = storageSafeFilename(path.basename(filepath));
   const contentType = detectContentType(filepath);
 
   const { data: existing, error: existingErr } = await supabase
@@ -724,10 +731,7 @@ async function addCollateral(todoName, filepath, { replace = false } = {}) {
   } else {
     const fileBuffer = await fs.readFile(filepath);
     const storagePath = `${userId}/${todo.id}/${filename}`;
-    const { error: uploadErr } = await supabase.storage
-      .from('brainy_files')
-      .upload(storagePath, fileBuffer, { contentType, upsert: true });
-    if (uploadErr) throw uploadErr;
+    await uploadToStorage(storagePath, fileBuffer, { contentType, upsert: true });
 
     if (existing) {
       const { error } = await supabase
@@ -830,13 +834,6 @@ async function getCollateral(todoName, filename) {
 // Entries in the same folder share that namespace, so uniqueness is checked by
 // storage_path, not just per entry.
 
-// Supabase can store keys containing '#' but won't sign URLs for them, so the
-// file would be unreachable. Drop '#' (as in "Invoice #123") and replace any
-// other character outside Supabase's safe key set with '_'.
-function storageSafeFilename(filename) {
-  return filename.replace(/#/g, '').replace(/[^\w !\-.*'()&$@=;:+,]/g, '_');
-}
-
 function knowledgeAttachmentLocation(userId, knowledgePath, filename) {
   const dir = require('path').posix.dirname(knowledgePath);
   const attachmentPath = dir === '.' ? filename : `${dir}/${filename}`;
@@ -919,10 +916,7 @@ async function addKnowledgeAttachment(knowledgePath, filepath, { replace = false
     throw new Error(`Attachment '${filename}' already exists on '${knowledgePath}'. Use --replace to overwrite.`);
   }
 
-  const { error: uploadErr } = await supabase.storage
-    .from('brainy_files')
-    .upload(storagePath, fileBuffer, { contentType, upsert: true });
-  if (uploadErr) throw uploadErr;
+  await uploadToStorage(storagePath, fileBuffer, { contentType, upsert: true });
 
   if (!existing) {
     const { error } = await supabase.from('brainy_knowledge_attachments').insert({
