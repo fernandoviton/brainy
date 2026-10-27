@@ -52,6 +52,10 @@ Then, for each thread, decide:
 
 - **Needs an action (now or later)?** → Create a Brainy TODO (use `/add-todo` logic) and label the thread **`ai-todo`**. Things merely being watched/awaited are just TODOs with status `later`/`scheduled` — still `ai-todo` on the email. If a follow-up only triggers conditionally on an existing TODO, fold it into that TODO's notes instead of spawning a new one.
 - **Has interesting durable knowledge?** → Capture it into a **knowledge entry** via `node backend/cli.js knowledge upsert <path> --file <tmp-file>` (use `/capture` logic). **Knowledge goes in knowledge entries, NEVER in the email or a label.** The email is only the source.
+- **A bill, payment confirmation or autopay notice from a biller with an entry under `finance/bills/`?** (Find it with `knowledge list --prefix finance/bills/`.) The bill is on autopay, so it needs no TODO unless the entry's **Anomaly rules** say it's off. `knowledge get` the entry and check the email against those rules.
+  - **Normal** → add the bill to the entry's **Bill history** table, then label the thread `ai-done`. `knowledge upsert` replaces the whole body, so write the full entry with the new row to `tmp/<file>.md` and pass `--file`.
+  - **Anomalous** → create a TODO naming the rule it broke and the comparison (e.g. "$910 vs $607 same month last year"), then label the thread `ai-todo`. Still add the bill to the history.
+  - A bill from a biller with **no** entry is ordinary mail. Triage it as below.
 - **A reservation reminder from Resy, OpenTable, Tock or a similar booking platform?** ("Confirm you're coming", "let the restaurant know", reminder of an upcoming booking.) Label it `ai-done` and create no TODO. The platform also texts the user, who confirms there. Only create a TODO if the email asks for something the text can't cover, such as a deposit or a form, or if the restaurant cancelled or changed the booking.
 - **A one-off invoice for a repair or service visit?** (A contractor, often sent through ServiceTitan or similar.) This is a record worth keeping:
   - Add the job (date, what was done, amount, tech) to the contractor's **History** in `contractors/<name>.md`. Create the entry if there isn't one. Link a related `home/...` entry if one exists.
@@ -65,6 +69,7 @@ Apply labels with `label_thread` using the label IDs. If you mislabel something,
 Summarize concisely:
 - **Labeled `ai-done` — machine-sent**: count + a sense of what (e.g. "11 promo/fundraising/receipt threads"). Category summaries are fine here, but every category you closed must appear; don't leave a thread covered by no category at all.
 - **Labeled `ai-done` — human-sent**: **list every one individually** — sender, subject, and the one-line reason it's closed. No exceptions, no bundling, no "and a few personal threads." If this list is long, it is still a list.
+- **Autopay bills checked**: for each one, the biller, the amount, the same month last year, and whether it was normal or anomalous.
 - **Action candidates → TODOs**: each with sender/subject, suggested action, thread ID, and whether it duplicates an existing TODO. Hold off on creating TODOs without the user's go-ahead unless they've asked you to run autonomously.
 - **Knowledge candidates**: anything worth a durable entry, with proposed path. Be conservative — don't manufacture entries.
 
