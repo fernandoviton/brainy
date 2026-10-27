@@ -52,6 +52,11 @@ Then, for each thread, decide:
 
 - **Needs an action (now or later)?** → Create a Brainy TODO (use `/add-todo` logic) and label the thread **`ai-todo`**. Things merely being watched/awaited are just TODOs with status `later`/`scheduled` — still `ai-todo` on the email. If a follow-up only triggers conditionally on an existing TODO, fold it into that TODO's notes instead of spawning a new one.
 - **Has interesting durable knowledge?** → Capture it into a **knowledge entry** via `node backend/cli.js knowledge upsert <path> --file <tmp-file>` (use `/capture` logic). **Knowledge goes in knowledge entries, NEVER in the email or a label.** The email is only the source.
+- **A reservation reminder from Resy, OpenTable, Tock or a similar booking platform?** ("Confirm you're coming", "let the restaurant know", reminder of an upcoming booking.) Label it `ai-done` and create no TODO. The platform also texts the user, who confirms there. Only create a TODO if the email asks for something the text can't cover, such as a deposit or a form, or if the restaurant cancelled or changed the booking.
+- **A one-off invoice for a repair or service visit?** (A contractor, often sent through ServiceTitan or similar.) This is a record worth keeping:
+  - Add the job (date, what was done, amount, tech) to the contractor's **History** in `contractors/<name>.md`. Create the entry if there isn't one. Link a related `home/...` entry if one exists.
+  - **Clearly paid** (paid stamp, zero balance) → label `ai-done`.
+  - **Not clearly paid** (a balance or due date, or you can't tell) → create a TODO to check whether it's paid, and label the thread `ai-todo`. The invoice often gets paid on the spot as part of the job, but a TODO the user closes in a glance beats a missed bill.
 - **Neither?** → Label it **`ai-done`** so it's not re-reviewed. If it was human-sent, it still gets named individually in the report (step 5).
 
 Apply labels with `label_thread` using the label IDs. If you mislabel something, `unlabel_thread` removes it.
