@@ -288,6 +288,17 @@ function loadMediaUrls(captureIndex, mediaItems) {
 
   for (var i = 0; i < mediaItems.length; i++) {
     (function (idx, item) {
+      if (isHtmlAttachment(item.filename, item.content_type)) {
+        var el = container.children[idx];
+        if (!el) return;
+        var a = document.createElement('a');
+        a.className = 'media-file';
+        a.href = attachmentViewerHref(item.storage_path, item.filename);
+        a.target = '_blank';
+        a.textContent = item.filename;
+        el.parentNode.replaceChild(a, el);
+        return;
+      }
       getSignedUrl(item.storage_path).then(function (url) {
         if (!url) return;
         var el = container.children[idx];

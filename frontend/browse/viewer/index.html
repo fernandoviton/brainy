@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainy — Attachment</title>
+  <meta name="theme-color" content="#F7F3ED">
+  <link rel="icon" href="../../icons/icon-192.png">
+  <link rel="stylesheet" href="../../shared.css">
+  <link rel="stylesheet" href="app.css">
+  <!-- Deliberately no CSP meta tag: a srcdoc iframe inherits its parent's
+       policy, which would block the attachment's own inline scripts. -->
+</head>
+<body>
+  <div id="viewer-bar">
+    <span id="viewer-title"></span>
+    <span id="viewer-status"></span>
+    <a id="viewer-raw" href="#" rel="noopener">Download original</a>
+  </div>
+
+  <div id="auth-section" style="display:none">
+    <p>Sign in to view this attachment.</p>
+    <button id="login-btn" type="button">Sign in with Google</button>
+  </div>
+
+  <!-- The attachment runs here, in an opaque origin: no allow-same-origin, so
+       its scripts can't touch Brainy's storage (the Supabase session) or
+       cookies, and no allow-top-navigation, so it can't redirect this tab. -->
+  <iframe id="viewer-frame" title="Attachment" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals" allow="fullscreen" referrerpolicy="no-referrer"></iframe>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../config.local.js"></script>
+  <script src="../../config.js"></script>
+  <script src="../../utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

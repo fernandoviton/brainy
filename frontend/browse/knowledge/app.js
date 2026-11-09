@@ -261,29 +261,5 @@ function renderAttachments(items, detailEl) {
   html += '</div>';
   detailEl.innerHTML += html;
 
-  resolveSignedUrls(detailEl);
-}
-
-function resolveSignedUrls(detailEl) {
-  var placeholders = detailEl.querySelectorAll('[data-storage-path]');
-  if (!placeholders || !placeholders.length) return;
-
-  for (var i = 0; i < placeholders.length; i++) {
-    (function (el) {
-      var storagePath = el.getAttribute('data-storage-path');
-      db.storage.from('brainy_files').createSignedUrl(storagePath, 3600)
-        .then(function (result) {
-          if (result.data && result.data.signedUrl) {
-            var a = document.createElement('a');
-            a.href = result.data.signedUrl;
-            a.target = '_blank';
-            a.className = 'collateral-file-link';
-            a.textContent = el.textContent;
-            if (el.parentNode && el.parentNode.replaceChild) {
-              el.parentNode.replaceChild(a, el);
-            }
-          }
-        });
-    })(placeholders[i]);
-  }
+  resolveAttachmentLinks(detailEl, db.storage.from('brainy_files'));
 }

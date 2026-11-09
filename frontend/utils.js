@@ -83,3 +83,56 @@ function escapeHtml(str) {
   div.appendChild(document.createTextNode(str));
   return div.innerHTML;
 }
+
+// ── Attachment links ─────────────────────────────────────────────
+// Supabase Storage serves HTML as text/plain with nosniff (anti-XSS on the
+// storage domain), so an .html attachment's signed URL shows source. Those
+// open in browse/viewer/ instead, which renders them in a sandboxed iframe.
+
+// eslint-disable-next-line no-unused-vars
+function isHtmlAttachment(filename, contentType) {
+  if (contentType && /^text\/html\b/i.test(contentType)) return true;
+  return !!filename && /\.html?$/i.test(filename);
+}
+
+// Relative to a browse page (browse/<page>/). The path rides in the hash so
+// it never reaches the static host's logs.
+// eslint-disable-next-line no-unused-vars
+function attachmentViewerHref(storagePath, filename) {
+  return '../viewer/#path=' + encodeURIComponent(storagePath) +
+    '&name=' + encodeURIComponent(filename || '');
+}
+
+// Replace each [data-storage-path] placeholder in `containerEl` (filename as
+// its text, optional data-content-type) with a link that opens in a new tab:
+// the viewer for HTML, a 1-hour signed URL from `bucket` for everything else.
+// eslint-disable-next-line no-unused-vars
+function resolveAttachmentLinks(containerEl, bucket) {
+  var placeholders = containerEl.querySelectorAll('[data-storage-path]');
+  if (!placeholders || !placeholders.length) return;
+
+  function link(el, href) {
+    var a = document.createElement('a');
+    a.href = href;
+    a.target = '_blank';
+    a.className = 'collateral-file-link';
+    a.textContent = el.textContent;
+    if (el.parentNode && el.parentNode.replaceChild) {
+      el.parentNode.replaceChild(a, el);
+    }
+  }
+
+  for (var i = 0; i < placeholders.length; i++) {
+    (function (el) {
+      var storagePath = el.getAttribute('data-storage-path');
+      if (isHtmlAttachment(el.textContent, el.getAttribute('data-content-type'))) {
+        link(el, attachmentViewerHref(storagePath, el.textContent));
+        return;
+      }
+      bucket.createSignedUrl(storagePath, 3600)
+        .then(function (result) {
+          if (result.data && result.data.signedUrl) link(el, result.data.signedUrl);
+        });
+    })(placeholders[i]);
+  }
+}

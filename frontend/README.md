@@ -35,6 +35,8 @@ The browse pages support hash-based deep links (they work on static hosting — 
 | Captures | `browse/captures/#capture=<id>` | `browse/captures/#capture=3f2a…` |
 | Knowledge | `browse/knowledge/#knowledge=<path>` | `browse/knowledge/#knowledge=tools/git/rebase.md` |
 
+HTML attachments (knowledge attachments, TODO collateral, capture media) open in `browse/viewer/#path=<storage path>&name=<filename>` rather than at their signed URL: Supabase Storage serves HTML as `text/plain` + `nosniff`, so the raw link shows source. The viewer downloads the file with the signed-in client and renders it in an `<iframe sandbox="allow-scripts …">` via `srcdoc` — never `allow-same-origin`, so the attachment's scripts can't read the Supabase session. A "Download original" link serves the raw file.
+
 On load the linked item is expanded (todos/knowledge) or highlighted (captures) and scrolled into view. If a linked todo or capture isn't in the default filter, it is fetched directly and shown on top. Expanding/collapsing a todo or knowledge card updates the URL hash so the current view can be copied as a link.
 
 ## Tests

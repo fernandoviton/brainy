@@ -61,12 +61,17 @@ function makeElement(tag) {
     querySelectorAll: jest.fn(function (selector) {
       // Parse data-storage-path attributes from innerHTML for signed URL tests
       if (selector === '[data-storage-path]') {
-        const matches = el.innerHTML.match(/data-storage-path="([^"]+)"/g) || [];
+        const matches = el.innerHTML.match(/<span[^>]*data-storage-path="[^"]+"[^>]*>[^<]*/g) || [];
         return matches.map(m => {
           const pathVal = m.match(/data-storage-path="([^"]+)"/)[1];
+          const typeMatch = m.match(/data-content-type="([^"]*)"/);
           const mockEl = makeElement('span');
-          mockEl.getAttribute = jest.fn((attr) => attr === 'data-storage-path' ? pathVal : null);
-          mockEl.textContent = 'file';
+          mockEl.getAttribute = jest.fn((attr) => {
+            if (attr === 'data-storage-path') return pathVal;
+            if (attr === 'data-content-type') return typeMatch ? typeMatch[1] : null;
+            return null;
+          });
+          mockEl.textContent = m.substring(m.indexOf('>') + 1) || 'file';
           mockEl.parentNode = { replaceChild: jest.fn() };
           return mockEl;
         });
@@ -815,6 +820,19 @@ describe('todo cards - signed URLs', () => {
     await signInAndExpand(env, 0);
 
     expect(env.mockCreateSignedUrl).toHaveBeenCalledWith('files/report.pdf', 3600);
+  });
+
+  test('HTML collateral links to the sandboxed viewer instead of a signed URL', async () => {
+    // Supabase Storage serves HTML as text/plain + nosniff, so the signed
+    // URL would show source.
+    const collateral = [
+      { id: 'c3', filename: 'deck', content_type: 'text/html', text_content: null, storage_path: 'files/deck' },
+    ];
+    const env = loadApp(sampleTodos, collateral);
+    const { detailEl } = await signInAndExpand(env, 0);
+
+    expect(detailEl.innerHTML).toContain('data-content-type="text/html"');
+    expect(env.mockCreateSignedUrl).not.toHaveBeenCalled();
   });
 });
 

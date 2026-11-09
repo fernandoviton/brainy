@@ -389,7 +389,8 @@ function renderCollateral(items, detailEl) {
     } else if (item.storage_path) {
       // Binary collateral — file link in a box
       html += '<div class="collateral-box collateral-box-link">' +
-        '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '">' +
+        '<span class="collateral-file-link" data-storage-path="' + escapeHtml(item.storage_path) + '"' +
+          (item.content_type ? ' data-content-type="' + escapeHtml(item.content_type) + '"' : '') + '>' +
           escapeHtml(item.filename) +
         '</span>' +
       '</div>';
@@ -406,29 +407,5 @@ function renderCollateral(items, detailEl) {
   detailEl.innerHTML += html;
 
   // Resolve signed URLs for binary items
-  resolveSignedUrls(detailEl);
-}
-
-function resolveSignedUrls(detailEl) {
-  var placeholders = detailEl.querySelectorAll('[data-storage-path]');
-  if (!placeholders || !placeholders.length) return;
-
-  for (var i = 0; i < placeholders.length; i++) {
-    (function (el) {
-      var storagePath = el.getAttribute('data-storage-path');
-      db.storage.from('brainy_files').createSignedUrl(storagePath, 3600)
-        .then(function (result) {
-          if (result.data && result.data.signedUrl) {
-            var a = document.createElement('a');
-            a.href = result.data.signedUrl;
-            a.target = '_blank';
-            a.className = 'collateral-file-link';
-            a.textContent = el.textContent;
-            if (el.parentNode && el.parentNode.replaceChild) {
-              el.parentNode.replaceChild(a, el);
-            }
-          }
-        });
-    })(placeholders[i]);
-  }
+  resolveAttachmentLinks(detailEl, db.storage.from('brainy_files'));
 }

@@ -710,3 +710,40 @@ describe('browse captures - switching filters keeps the search text', () => {
     expect(env.cardsHtml()).not.toContain('Filler capture 2');
   });
 });
+
+describe('browse captures - media links', () => {
+  function mediaContainer() {
+    const child = { parentNode: null };
+    const container = { children: [child], replaceChild: jest.fn() };
+    child.parentNode = container;
+    return container;
+  }
+
+  test('an HTML attachment links to the sandboxed viewer, not its signed URL', async () => {
+    const { ctx } = loadApp();
+    const container = mediaContainer();
+    ctx.document.querySelector = jest.fn(() => container);
+    const bucket = ctx.db.storage.from('brainy_files');
+    bucket.createSignedUrl.mockClear();
+
+    ctx.loadMediaUrls(0, [{ filename: 'deck.html', content_type: 'text/plain', storage_path: 'u1/c/deck.html' }]);
+    await flushPromises();
+
+    expect(bucket.createSignedUrl).not.toHaveBeenCalled();
+    const a = container.replaceChild.mock.calls[0][0];
+    expect(a.href).toBe('../viewer/#path=u1%2Fc%2Fdeck.html&name=deck.html');
+    expect(a.target).toBe('_blank');
+  });
+
+  test('other files still link to their signed URL', async () => {
+    const { ctx } = loadApp();
+    const container = mediaContainer();
+    ctx.document.querySelector = jest.fn(() => container);
+    ctx.db.storage.from('brainy_files').createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://signed/r.pdf' } });
+
+    ctx.loadMediaUrls(0, [{ filename: 'r.pdf', content_type: 'application/pdf', storage_path: 'u1/c/r.pdf' }]);
+    await flushPromises();
+
+    expect(container.replaceChild.mock.calls[0][0].href).toBe('https://signed/r.pdf');
+  });
+});
