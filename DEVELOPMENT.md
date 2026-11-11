@@ -50,6 +50,9 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
   - `frontend/health.js` — the site-wide scheduler health banner and nav badges, loaded on every page after its `app.js`.
   - `tools/fetch-capture-media.js` — downloads a capture's media to `tmp/` so agent jobs can read it without network tools.
   - **Audit trail:** `audit()` in `cli.js` records every CLI write made while `BRAINY_RUN_ID` is set. A new write command must call it, or agent runs can't be checked.
+- **Knee PT app** (design: `docs/pt-app.md`):
+  - `frontend/pt/` — the PWA page. `pt-core.js` (pure logic, also `require`d by Node), `pt-store.js`, `pt-chart.js`, `app.js` (UI only). `pt/?demo=1` runs on localStorage with no sign-in (`?demo=seed` adds sample data) — use it to check UI changes locally.
+  - `backend/pt-reminders.js` — the Web Push sender behind `pt remind` (run by a scheduler command job).
 - `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers.
 - `scripts/google-login.js` — CLI Google sign-in; writes `SUPABASE_REFRESH_TOKEN` to `.env`. `scripts/open-browser.js` is its cross-platform browser launcher.
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.

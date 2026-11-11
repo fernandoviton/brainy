@@ -1219,7 +1219,60 @@ async function saveSchedulerState(state) {
   if (error) throw error;
 }
 
+// ── Knee PT app (frontend/pt/, docs/pt-app.md) ──────────────────────────
+
+const PT_ENTRIES = 'brainy_pt_entries';
+const PT_SETTINGS = 'brainy_pt_settings';
+const PT_SUBS = 'brainy_pt_push_subscriptions';
+
+async function listPtEntries(sinceDate) {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(PT_ENTRIES).select('*')
+    .eq('user_id', userId).gte('entry_date', sinceDate)
+    .order('occurred_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// The settings row: { settings, push_checked_at }, or null before the app's first run.
+async function getPtSettings() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(PT_SETTINGS).select('settings, push_checked_at')
+    .eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function setPtPushCheckedAt(iso) {
+  const userId = await getUserId();
+  const { error } = await supabase.from(PT_SETTINGS).update({ push_checked_at: iso }).eq('user_id', userId);
+  if (error) throw error;
+}
+
+async function listPtPushSubscriptions() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(PT_SUBS).select('*').eq('user_id', userId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function updatePtPushSubscription(id, fields) {
+  const { error } = await supabase.from(PT_SUBS).update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+async function deletePtPushSubscription(id) {
+  const { error } = await supabase.from(PT_SUBS).delete().eq('id', id);
+  if (error) throw error;
+}
+
 module.exports = {
+  listPtEntries,
+  getPtSettings,
+  setPtPushCheckedAt,
+  listPtPushSubscriptions,
+  updatePtPushSubscription,
+  deletePtPushSubscription,
   listTodos,
   getTodo,
   createTodo,

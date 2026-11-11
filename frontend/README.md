@@ -39,6 +39,10 @@ HTML attachments (knowledge attachments, TODO collateral, capture media) open in
 
 On load the linked item is expanded (todos/knowledge) or highlighted (captures) and scrolled into view. If a linked todo or capture isn't in the default filter, it is fetched directly and shown on top. Expanding/collapsing a todo or knowledge card updates the URL hash so the current view can be copied as a link.
 
+## Knee PT app
+
+`pt/` is a separate installable app (own `manifest.json`, "Knee PT") for knee-rehab reminders and pain logging. See `docs/pt-app.md`. Try it locally without signing in at `pt/?demo=seed`.
+
 ## Tests
 
 From the project root:

@@ -21,6 +21,7 @@ Resources:
   backup               Export the whole store to a local folder [--target <p>] [--force] [--config <p>]
   job                  Manage scheduled jobs (list, get, create, update, delete, run, runs)
   scheduler            Run one scheduler tick, or show what it would do (tick, status)
+  pt                   Knee PT app data (log, summary) and push reminders (remind)
 
 Run "node backend/cli.js <resource> help" for details on each resource.
 All commands support --format json|text (text is the default human output).
@@ -143,6 +144,19 @@ Actions:
             and record state. The systemd timer runs this every 15 minutes.
   status    Show usage, what would run right now and why the rest are waiting, and any
             starved jobs. Reads usage but runs nothing.`,
+
+  pt: `Usage: node backend/cli.js pt <action> [options]
+
+Data logged by the Knee PT web app (frontend/pt/, docs/pt-app.md).
+
+Actions:
+  log [--days <n>]       Every entry (morning pain, flares, lift days, exercises) for
+                         the last n days (default 14), oldest first.
+  summary [--days <n>]   Per-day rows, flare-trigger counts, and lift-day vs other-day
+                         comparison for the last n days (default 30).
+  remind                 Send the Web Push reminders that came due since the last run.
+                         Run by a scheduler command job every tick; needs the VAPID_*
+                         values in .env (see docs/pt-app.md).`,
 };
 
 function showHelp(resource) {
@@ -188,7 +202,7 @@ function parseArgs(argv) {
   return { args, positional, rawFlags };
 }
 
-const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge', 'job', 'scheduler'];
+const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge', 'job', 'scheduler', 'pt'];
 
 // Flags accepted by every command. `--format` selects output shape; `--help`/`-h`
 // short-circuits to usage text before anything else runs.
@@ -297,6 +311,11 @@ const FLAG_SPEC = {
     tick: { flags: [], maxPositional: 2, usage: 'scheduler tick' },
     status: { flags: [], maxPositional: 2, usage: 'scheduler status' },
   },
+  pt: {
+    log: { flags: ['days'], maxPositional: 2, usage: 'pt log [--days <n>]' },
+    summary: { flags: ['days'], maxPositional: 2, usage: 'pt summary [--days <n>]' },
+    remind: { flags: [], maxPositional: 2, usage: 'pt remind' },
+  },
 };
 
 // Arity of every flag the CLI knows, so a missing or surplus value is caught by
@@ -330,6 +349,7 @@ const FLAG_ARITY = {
   // value (non-empty required)
   action: 'value',
   category: 'value',
+  days: 'value',
   detail: 'value',
   job: 'value',
   since: 'value',
@@ -974,6 +994,63 @@ async function handleJob(storage, action, rest, args, format) {
   }
 }
 
+function ptDescribeEntry(e) {
+  const note = e.note ? ` — ${e.note}` : '';
+  if (e.kind === 'morning') return `morning R${e.pain_right} L${e.pain_left}${note}`;
+  if (e.kind === 'flare') return `flare ${e.pain} ${e.side} ${e.trigger}${note}`;
+  if (e.kind === 'lift') return `lift ${e.lift_notes || ''}${note}`.trim();
+  if (e.kind === 'exercise') return `exercise ${e.exercise_name || e.exercise_id}${note}`;
+  return e.kind;
+}
+
+async function handlePt(storage, action, args, format) {
+  if (!action || action === 'help') { showHelp('pt'); return; }
+  const core = require('../frontend/pt/pt-core.js');
+  if (action === 'log' || action === 'summary') {
+    const days = args.days === undefined ? (action === 'log' ? 14 : 30) : Number(args.days);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) {
+      console.error(`Error: --days must be a whole number from 1 to 3650 (got "${args.days}")`);
+      process.exit(1);
+    }
+    const today = core.ptLocalDate(Date.now());
+    const since = core.ptLocalDate(Date.now() - (days - 1) * 86400000);
+    const entries = await storage.listPtEntries(since);
+    if (action === 'log') {
+      if (format === 'json') { output(entries, format); return; }
+      if (!entries.length) console.log('No PT entries in this range.');
+      for (const e of entries) {
+        const time = new Date(e.occurred_at).toTimeString().slice(0, 5);
+        console.log(`${e.entry_date} ${time}  ${ptDescribeEntry(e)}`);
+      }
+      return;
+    }
+    const s = core.ptSummarize(entries, today, days);
+    if (format === 'json') { output(s, format); return; }
+    const fmt = (v) => (v === null || v === undefined ? '-' : String(Math.round(v * 10) / 10));
+    for (const d of s.days) {
+      console.log(`${d.date}  R ${fmt(d.morningRight)} L ${fmt(d.morningLeft)}  flares ${d.flares}` +
+        `${d.flares ? ` (max ${d.maxFlare})` : ''}${d.lift ? `  LIFT ${d.liftNotes}` : ''}${d.exercises ? `  ex ${d.exercises}` : ''}`);
+    }
+    console.log(`Triggers: ${s.triggers.map((t) => `${t.id} ${t.count}`).join(', ') || 'none'}`);
+    console.log(`Flares/day: lift days ${fmt(s.lift.flaresPerLiftDay)} vs other ${fmt(s.lift.flaresPerOtherDay)}; ` +
+      `next-morning worse knee: after lift ${fmt(s.lift.nextMorningAfterLift)} vs other ${fmt(s.lift.nextMorningAfterOther)}`);
+  } else if (action === 'remind') {
+    const reminders = require('./pt-reminders');
+    const sendPush = reminders.webPushSender();
+    const result = await reminders.sendDueReminders({ storage, sendPush, appUrl: process.env.PT_APP_URL || '' });
+    await audit(storage, 'pt remind', 'pt', null, result.skipped || `sent ${result.sent || 0}`);
+    if (format === 'json') { output(result, format); return; }
+    if (result.skipped) { console.log(`Skipped: ${result.skipped}`); return; }
+    if (!result.due.length) { console.log('Nothing due.'); return; }
+    for (const r of result.due) console.log(`Due ${r.time}: ${r.label}`);
+    console.log(`Sent ${result.sent}, failed ${result.failed}, removed ${result.removed} expired subscription(s).`);
+  } else {
+    console.error(`Unknown pt action: ${action}\n`);
+    showHelp('pt');
+    process.exit(1);
+  }
+}
+
 async function handleScheduler(storage, action, args, format) {
   if (!action || action === 'help') { showHelp('scheduler'); return; }
   const host = require('./scheduler-host');
@@ -1354,6 +1431,8 @@ async function main() {
       await handleJob(storage, action, rest, args, format);
     } else if (resource === 'scheduler') {
       await handleScheduler(storage, action, args, format);
+    } else if (resource === 'pt') {
+      await handlePt(storage, action, args, format);
     } else {
       console.error(`Unknown resource: ${resource}\n`);
       showHelp('main');

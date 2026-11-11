@@ -6,8 +6,11 @@ var PT_DEMO = /[?&]demo=/.test(window.location.search);
 var PT_HISTORY_DAYS = 90;
 var PT_DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+// The Supabase library comes from a CDN; the service worker caches it after the
+// first online visit, so it is only missing on a first-ever offline open.
+var PT_NO_CLIENT = !PT_DEMO && typeof supabase === 'undefined';
 var db;
-if (!PT_DEMO) db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_PUBLISHABLE_KEY);
+if (!PT_DEMO && !PT_NO_CLIENT) db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_PUBLISHABLE_KEY);
 
 var pt = {
   store: null,
@@ -623,7 +626,11 @@ document.addEventListener('visibilitychange', function () {
   }
 });
 
-if (PT_DEMO) {
+if (PT_NO_CLIENT) {
+  $('auth-section').hidden = false;
+  $('auth-section').querySelector('p').textContent = 'Could not load the sign-in library — check your connection and reopen.';
+  $('login-btn').hidden = true;
+} else if (PT_DEMO) {
   $('demo-banner').hidden = false;
   $('logout-btn').hidden = true;
   var demoStore = ptLocalStore(window.localStorage);

@@ -73,6 +73,8 @@ So a non-zero exit here means *nothing was written* — fix the argument and re-
 - `knowledge attachment add <path> <filepath> [--replace]` — attach a file; the entry must already exist
 - `knowledge attachment remove <path> <filename>` — remove attachment
 
+**Knee PT data** (logged from the `frontend/pt/` app; see `docs/pt-app.md`): `pt log [--days <n>]` lists entries (morning pain R/L, flares with trigger, lift days, exercises done); `pt summary [--days <n>]` gives per-day rows, trigger counts and a lift-day comparison. Read these, not the `knee-rehab` TODO notes, when asked about knee pain trends.
+
 Utilities: `check-integrity`, `promote-scheduled`, `backup`, `job`, `scheduler` (see **Scheduled jobs** below)
 
 **Backup:** `backup [--target <path>] [--force] [--config <path>]` exports the entire store (todos, knowledge, captures, archives, and binary files) to a local **git repo** as a browsable tree, committing each run (local version history). Requires `git` on PATH; an empty target is `git init`ed and gets a `.brainy-backup` sentinel file, a non-empty non-repo target is refused, and an existing repo without the sentinel is refused (won't take over an unrelated repo). Reads `backup.config.json` (gitignored; `targetPath` + `minIntervalDays`, see `backup.config.example.json`) and throttles by `minIntervalDays` unless `--force`. Runs automatically on session start via the `run_backup` hook — a no-op most starts (throttle), and reports through a session message including the committed diff size. When unconfigured it prints a setup pointer instead of failing. Carbonite (or similar) handles off-site/DR of the target folder.
