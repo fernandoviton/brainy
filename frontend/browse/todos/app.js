@@ -103,10 +103,30 @@ function renderFiltered() {
   renderTodos(filterItems(_todos, SEARCH_FIELDS, searchEl ? searchEl.value : ''));
 }
 
+var ARCHIVE_COLUMNS = 'id, todo_name, completion_date, year_month, summary_text, todo_snapshot, collateral_snapshot';
+
+function archiveRowToTodo(r) {
+  var snap = r.todo_snapshot || {};
+  var summary = r.summary_text || '';
+  return {
+    id: r.id,
+    name: r.todo_name,
+    status: 'archived',
+    priority: snap.priority || null,
+    summary: summary.split(/\n\n/)[0],
+    notes: summary,
+    category: snap.category || null,
+    due: r.completion_date,
+    created_at: r.completion_date,
+    _archived: true,
+    _collateralSnapshot: r.collateral_snapshot || null,
+  };
+}
+
 function loadTodos() {
   if (_statusFilter === 'archived') {
     var aq = db.from('brainy_archive_entries')
-      .select('id, todo_name, completion_date, year_month, summary_text, todo_snapshot, collateral_snapshot')
+      .select(ARCHIVE_COLUMNS)
       .order('completion_date', { ascending: false })
       .limit(ARCHIVE_LIMIT);
     aq.then(function (result) {
@@ -116,23 +136,7 @@ function loadTodos() {
       }
       var rows = result.data || [];
       _atLimit = rows.length >= ARCHIVE_LIMIT ? ARCHIVE_LIMIT : 0;
-      _todos = rows.map(function (r) {
-        var snap = r.todo_snapshot || {};
-        var summary = r.summary_text || '';
-        return {
-          id: r.id,
-          name: r.todo_name,
-          status: 'archived',
-          priority: snap.priority || null,
-          summary: summary.split(/\n\n/)[0],
-          notes: summary,
-          category: snap.category || null,
-          due: r.completion_date,
-          created_at: r.completion_date,
-          _archived: true,
-          _collateralSnapshot: r.collateral_snapshot || null,
-        };
-      });
+      _todos = rows.map(archiveRowToTodo);
       if (_priorityFilter) {
         _todos = _todos.filter(function (t) { return t.priority === _priorityFilter; });
       }
@@ -169,9 +173,10 @@ function loadTodos() {
   });
 }
 
-// On first load, open the todo named in the URL hash (#todo=<name>). If it
-// isn't in the current filter's results (e.g. a "later" todo while the
-// default filter is "active"), fetch it by name and show it on top.
+// Open the todo named in the URL hash (#todo=<name>), on first load and when a
+// cross-reference link changes the hash. If it isn't in the current filter's
+// results (e.g. a "later" todo while the default filter is "active"), fetch it
+// by name and show it on top, falling back to the archive for completed ones.
 function handleDeepLink() {
   if (!_deepLinkName) return;
   var name = _deepLinkName;
@@ -189,13 +194,45 @@ function handleDeepLink() {
     .eq('name', name)
     .then(function (result) {
       var rows = (!result.error && result.data) || [];
-      if (!rows.length) return;
-      _todos = [rows[0]].concat(_todos);
-      // Deep links resolve on first load, when the search box is still empty,
-      // so the linked todo is at index 0 of the rendered list.
-      renderFiltered();
-      openTodoAt(0);
+      if (rows.length) {
+        showOnTop(rows[0]);
+        return;
+      }
+      db.from('brainy_archive_entries')
+        .select(ARCHIVE_COLUMNS)
+        .eq('todo_name', name)
+        .order('completion_date', { ascending: false })
+        .limit(1)
+        .then(function (archived) {
+          var arows = (!archived.error && archived.data) || [];
+          if (!arows.length) return;
+          var todo = archiveRowToTodo(arows[0]);
+          _archivedCollateralByName[todo.name] = todo._collateralSnapshot;
+          showOnTop(todo);
+        });
     });
+}
+
+function showOnTop(todo) {
+  _todos = [todo].concat(_todos);
+  // The search box is empty here (first load, or cleared by the hashchange
+  // handler), so the linked todo is at index 0 of the rendered list.
+  renderFiltered();
+  openTodoAt(0);
+}
+
+// Cross-reference links to another todo only change the hash on this page.
+if (window.addEventListener) {
+  window.addEventListener('hashchange', function () {
+    var name = getDeepLink('todo');
+    if (!name) return;
+    if (searchEl && searchEl.value) {
+      searchEl.value = '';
+      renderFiltered();
+    }
+    _deepLinkName = name;
+    handleDeepLink();
+  });
 }
 
 function openTodoAt(idx) {
@@ -346,6 +383,11 @@ function renderDetail(row, detailEl) {
     html += '<div class="card-notes">' + renderMarkdown(row.notes) + '</div>';
   }
   detailEl.innerHTML = html;
+  linkifyDetail(detailEl);
+}
+
+function linkifyDetail(detailEl) {
+  loadReferenceIndex(db).then(function (index) { linkifyReferences(detailEl, index); });
 }
 
 function loadCollateral(todoId, detailEl) {
@@ -405,6 +447,8 @@ function renderCollateral(items, detailEl) {
 
   html += '</div>';
   detailEl.innerHTML += html;
+  // `innerHTML +=` re-parses the notes too; links already added survive as HTML.
+  linkifyDetail(detailEl);
 
   // Resolve signed URLs for binary items
   resolveAttachmentLinks(detailEl, db.storage.from('brainy_files'));

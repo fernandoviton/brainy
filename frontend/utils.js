@@ -136,3 +136,135 @@ function resolveAttachmentLinks(containerEl, bucket) {
     })(placeholders[i]);
   }
 }
+
+// ── Cross-references ─────────────────────────────────────────────
+// Notes and knowledge mention other items by name (`plan-italy-trip`,
+// `travel/trips/italy-apr-2027.md`). The stored text stays plain; links are
+// built here, at render time, from the names that exist in the store, so they
+// never bake in a host and only appear for real items.
+
+// Relative to a browse page (browse/<page>/).
+// eslint-disable-next-line no-unused-vars
+function todoHref(name) {
+  return '../todos/#todo=' + encodeURIComponent(name);
+}
+
+// eslint-disable-next-line no-unused-vars
+function knowledgeHref(path) {
+  return '../knowledge/#knowledge=' + encodeURIComponent(path).replace(/%2F/gi, '/');
+}
+
+var REFERENCE_INDEX_LIMIT = 5000;
+var _referenceIndexPromise = null;
+
+// Resolves to { todos: {name: true}, knowledge: {path: true} }, covering live
+// and archived TODOs. Fetched once per page load; a failed table just
+// contributes nothing.
+// eslint-disable-next-line no-unused-vars
+function loadReferenceIndex(client) {
+  if (_referenceIndexPromise) return _referenceIndexPromise;
+  function rows(table, column) {
+    return new Promise(function (resolve) {
+      client.from(table).select(column).limit(REFERENCE_INDEX_LIMIT).then(function (result) {
+        resolve((result && !result.error && result.data) || []);
+      }, function () { resolve([]); });
+    });
+  }
+  _referenceIndexPromise = Promise.all([
+    rows('brainy_todos', 'name'),
+    rows('brainy_archive_entries', 'todo_name'),
+    rows('brainy_knowledge', 'path'),
+  ]).then(function (res) {
+    var index = { todos: {}, knowledge: {} };
+    res[0].forEach(function (r) { if (r.name) index.todos[r.name] = true; });
+    res[1].forEach(function (r) { if (r.todo_name) index.todos[r.todo_name] = true; });
+    res[2].forEach(function (r) { if (r.path) index.knowledge[r.path] = true; });
+    return index;
+  });
+  return _referenceIndexPromise;
+}
+
+function referenceHref(text, index) {
+  if (Object.prototype.hasOwnProperty.call(index.knowledge, text)) return knowledgeHref(text);
+  if (Object.prototype.hasOwnProperty.call(index.todos, text)) return todoHref(text);
+  return null;
+}
+
+function hasAncestor(node, root, tags) {
+  for (var el = node.parentNode; el && el !== root; el = el.parentNode) {
+    if (el.nodeName && tags.indexOf(el.nodeName.toLowerCase()) !== -1) return true;
+  }
+  return false;
+}
+
+function referenceLink(href) {
+  var a = document.createElement('a');
+  a.href = href;
+  a.className = 'ref-link';
+  return a;
+}
+
+// Bare text only matches multi-word TODO names (a lone "recurring" in prose is
+// too likely to be an ordinary word) and knowledge paths. Boundaries stop
+// "plan-italy-trip-2" or "a/home/x.md" from matching a shorter name, while a
+// sentence-ending period is still allowed after a path.
+function bareReferencePattern(index) {
+  var terms = Object.keys(index.knowledge).concat(
+    Object.keys(index.todos).filter(function (n) { return n.indexOf('-') !== -1; }));
+  if (!terms.length) return null;
+  terms.sort(function (a, b) { return b.length - a.length; });
+  var alternation = terms.map(function (t) {
+    return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }).join('|');
+  return new RegExp('(^|[^\\w/.-])(' + alternation + ')(?![\\w/-]|\\.\\w)', 'g');
+}
+
+// Turn references to known TODOs / knowledge entries inside `containerEl`
+// (already-rendered markdown) into links. A `code` span links when its whole
+// text is a known name or path; plain text links on known multi-word names and
+// paths. Existing links and code blocks are left alone, so re-running is safe.
+// eslint-disable-next-line no-unused-vars
+function linkifyReferences(containerEl, index) {
+  if (!index || !containerEl || !containerEl.querySelectorAll ||
+      typeof document === 'undefined' || !document.createTreeWalker) return;
+
+  var codes = containerEl.querySelectorAll('code');
+  for (var i = 0; i < codes.length; i++) {
+    var code = codes[i];
+    if (hasAncestor(code, containerEl, ['a', 'pre'])) continue;
+    var href = referenceHref(code.textContent.trim(), index);
+    if (!href) continue;
+    var a = referenceLink(href);
+    code.parentNode.replaceChild(a, code);
+    a.appendChild(code);
+  }
+
+  var pattern = bareReferencePattern(index);
+  if (!pattern) return;
+  var walker = document.createTreeWalker(containerEl, 4 /* NodeFilter.SHOW_TEXT */);
+  var textNodes = [];
+  while (walker.nextNode()) {
+    if (!hasAncestor(walker.currentNode, containerEl, ['a', 'code', 'pre', 'script', 'style'])) {
+      textNodes.push(walker.currentNode);
+    }
+  }
+  textNodes.forEach(function (node) {
+    var text = node.nodeValue;
+    pattern.lastIndex = 0;
+    var m;
+    var last = 0;
+    var frag = null;
+    while ((m = pattern.exec(text)) !== null) {
+      var start = m.index + m[1].length;
+      frag = frag || document.createDocumentFragment();
+      frag.appendChild(document.createTextNode(text.substring(last, start)));
+      var link = referenceLink(referenceHref(m[2], index));
+      link.textContent = m[2];
+      frag.appendChild(link);
+      last = start + m[2].length;
+    }
+    if (!frag) return;
+    frag.appendChild(document.createTextNode(text.substring(last)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}

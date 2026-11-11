@@ -86,9 +86,9 @@ function loadKnowledge() {
   });
 }
 
-// On first load, expand and scroll to the entry named in the URL hash
-// (#knowledge=<path>). All entries are loaded up front, so no fallback
-// fetch is needed.
+// Expand and scroll to the entry named in the URL hash (#knowledge=<path>), on
+// first load and when a cross-reference link changes the hash. All entries are
+// loaded up front, so no fallback fetch is needed.
 function handleDeepLink() {
   if (!_deepLinkPath) return;
   var item = _itemsByPath[_deepLinkPath];
@@ -100,6 +100,20 @@ function handleDeepLink() {
   card.classList.add('card-expanded');
   ensureDetail(card, item);
   if (card.scrollIntoView) card.scrollIntoView();
+}
+
+// Cross-reference links to another entry only change the hash on this page.
+if (window.addEventListener) {
+  window.addEventListener('hashchange', function () {
+    var path = getDeepLink('knowledge');
+    if (!path) return;
+    if (searchEl && searchEl.value) {
+      searchEl.value = '';
+      renderKnowledge(_items);
+    }
+    _deepLinkPath = path;
+    handleDeepLink();
+  });
 }
 
 function renderPathBreadcrumb(path) {
@@ -226,6 +240,7 @@ function renderDetail(row, detailEl) {
     html += '<div class="detail-empty">No content.</div>';
   }
   detailEl.innerHTML = html;
+  loadReferenceIndex(db).then(function (index) { linkifyReferences(detailEl, index); });
 }
 
 function loadAttachments(knowledgeId, detailEl) {

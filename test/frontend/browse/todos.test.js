@@ -212,6 +212,10 @@ function loadApp(todos, collateralData, opts) {
     console: { error: jest.fn(), log: jest.fn() },
     parseInt: parseInt,
   };
+  const windowListeners = {};
+  if (opts && opts.windowEvents) {
+    ctx.window.addEventListener = jest.fn((event, handler) => { windowListeners[event] = handler; });
+  }
 
   // Add marked/DOMPurify unless explicitly excluded
   if (!opts || !opts.noMarkdown) {
@@ -225,7 +229,7 @@ function loadApp(todos, collateralData, opts) {
 
   return {
     ctx, dom, mockAuth, mockFrom, mockQuery,
-    collateralQuery, mockCreateSignedUrl, authCallback,
+    collateralQuery, mockCreateSignedUrl, authCallback, windowListeners,
   };
 }
 
@@ -807,6 +811,73 @@ describe('browse todos - deep linking', () => {
 
     expect(suppQuery.eq).toHaveBeenCalledWith('name', 'write-docs');
     expect(dom.elements['cards'].innerHTML).toContain('write-docs');
+  });
+});
+
+describe('browse todos - cross-reference navigation', () => {
+  test('a hash change to #todo=<name> opens that todo without a reload', async () => {
+    const env = loadApp(sampleTodos, [], { windowEvents: true });
+    env.authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    const card = makeMockCard(1);
+    env.dom.elements['cards'].querySelector = jest.fn((sel) =>
+      sel === '[data-todo-idx="1"]' ? card : null);
+    card.scrollIntoView = jest.fn();
+    env.ctx.window.location.hash = '#todo=write-docs';
+    env.windowListeners.hashchange();
+    await flushPromises();
+
+    expect(card.classList.add).toHaveBeenCalledWith('card-expanded');
+    expect(card.scrollIntoView).toHaveBeenCalled();
+  });
+
+  test('a link to an archived todo falls back to the archive', async () => {
+    const initialQuery = buildMockQuery([sampleTodos[0]]);
+    const liveLookup = buildMockQuery([]);
+    const archiveLookup = buildMockQuery([{
+      id: 'a1', todo_name: 'old-task', completion_date: '2026-01-02',
+      summary_text: 'Did the thing', todo_snapshot: { priority: 'P2' }, collateral_snapshot: null,
+    }]);
+    let todoCalls = 0;
+    const mockFrom = jest.fn((table) => {
+      if (table === 'brainy_archive_entries') return archiveLookup;
+      if (table === 'brainy_todos') return todoCalls++ === 0 ? initialQuery : liveLookup;
+      return buildMockQuery([]);
+    });
+    let authCallback;
+    const ctx = {
+      CONFIG: { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'test-key' },
+      supabase: { createClient: jest.fn().mockReturnValue({
+        auth: { onAuthStateChange: jest.fn((cb) => { authCallback = cb; }), signInWithOAuth: jest.fn(), signOut: jest.fn() },
+        from: mockFrom,
+        storage: { from: jest.fn() },
+      }) },
+      document: buildMockDOM(),
+      window: {
+        location: { origin: 'https://example.com', pathname: '/browse/todos/', hash: '#todo=old-task' },
+        history: { replaceState: jest.fn() },
+      },
+      console: { error: jest.fn() },
+      parseInt: parseInt,
+    };
+    vm.createContext(ctx);
+    vm.runInContext(utilsCode, ctx);
+    vm.runInContext(appCode, ctx);
+
+    authCallback('SIGNED_IN', { user: { id: '123' } });
+    await flushPromises();
+
+    expect(archiveLookup.eq).toHaveBeenCalledWith('todo_name', 'old-task');
+    const html = ctx.document.elements['cards'].innerHTML;
+    expect(html).toContain('old-task');
+    expect(html).toContain('badge-status-archived');
+  });
+
+  test('expanding a todo loads the reference index used to link its notes', async () => {
+    const env = loadApp(sampleTodos, []);
+    await signInAndExpand(env, 0);
+    expect(env.mockFrom).toHaveBeenCalledWith('brainy_knowledge');
   });
 });
 

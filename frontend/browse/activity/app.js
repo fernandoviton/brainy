@@ -175,6 +175,12 @@ function render() {
     html += '</div>';
   }
   cardsEl.innerHTML = html;
+  var bodies = cardsEl.querySelectorAll ? cardsEl.querySelectorAll('.report-body') : [];
+  if (bodies.length) {
+    loadReferenceIndex(db).then(function (index) {
+      for (var j = 0; j < bodies.length; j++) linkifyReferences(bodies[j], index);
+    });
+  }
 }
 
 filtersEl.addEventListener('click', function (e) {
