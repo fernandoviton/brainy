@@ -1,4 +1,4 @@
-var CACHE_NAME = 'brainy-v5';
+var CACHE_NAME = 'brainy-v6';
 var SHELL_FILES = [
   '.',
   'shared.css',
@@ -12,6 +12,14 @@ var SHELL_FILES = [
   'capture/upload.js',
   'config.js',
   'manifest.json',
+  'pt/',
+  'pt/index.html',
+  'pt/app.js',
+  'pt/app.css',
+  'pt/pt-core.js',
+  'pt/pt-store.js',
+  'pt/pt-chart.js',
+  'pt/manifest.json',
 ];
 
 self.addEventListener('install', function (e) {
@@ -46,5 +54,34 @@ self.addEventListener('fetch', function (e) {
       .catch(function () {
         return caches.match(e.request);
       })
+  );
+});
+
+// Web Push (PT reminders). The sender uses the Declarative Web Push payload
+// ({ web_push: 8030, notification: {...} }): iOS 18.4+ shows it without
+// running this handler; everywhere else this handler shows the same thing.
+self.addEventListener('push', function (e) {
+  var payload = null;
+  try { payload = e.data ? e.data.json() : null; } catch (err) { payload = null; }
+  var n = (payload && payload.notification) || {};
+  var url = n.navigate || new URL('pt/', self.registration.scope).href;
+  e.waitUntil(self.registration.showNotification(n.title || 'Knee PT', {
+    body: n.body || 'Time for a knee break.',
+    tag: n.tag,
+    icon: new URL('icons/icon-192.png', self.registration.scope).href,
+    data: { url: url },
+  }));
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || new URL('pt/', self.registration.scope).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (wins) {
+      for (var i = 0; i < wins.length; i++) {
+        if (wins[i].url.indexOf(url) === 0 && wins[i].focus) return wins[i].focus();
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });

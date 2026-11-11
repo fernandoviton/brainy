@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Knee PT</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F7F3ED">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Knee PT">
+  <link rel="icon" href="../icons/icon-192.png">
+  <link rel="apple-touch-icon" href="../icons/icon-192.png">
+  <link rel="stylesheet" href="../shared.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>Knee PT</h1>
+
+    <div id="demo-banner" class="pt-banner" hidden>
+      Demo mode: entries stay in this browser only. <a href="./">Leave demo</a>
+    </div>
+
+    <div id="auth-section" hidden>
+      <p>Sign in to log your knee.</p>
+      <button id="login-btn" type="button">Sign in with Google</button>
+    </div>
+
+    <div id="app-section" hidden>
+      <div id="top-bar">
+        <span id="next-reminder"></span>
+        <button id="logout-btn" type="button">Sign out</button>
+      </div>
+      <div id="outbox-msg" class="pt-banner" hidden></div>
+
+      <!-- ── Today ─────────────────────────────── -->
+      <section id="tab-today" class="pt-tab">
+        <form id="flare-form" class="pt-card" autocomplete="off">
+          <h2>Flare now</h2>
+          <div class="pt-label">Pain</div>
+          <div class="pt-scale" data-field="flare-pain" role="radiogroup" aria-label="Flare pain 0 to 10"></div>
+          <div class="pt-label">Knee</div>
+          <div class="pt-chips" data-field="flare-side" role="radiogroup" aria-label="Which knee">
+            <button type="button" data-value="right" class="selected">Right</button>
+            <button type="button" data-value="left">Left</button>
+            <button type="button" data-value="both">Both</button>
+          </div>
+          <div class="pt-label">Trigger</div>
+          <div class="pt-chips pt-chips-wrap" data-field="flare-trigger" role="radiogroup" aria-label="Trigger"></div>
+          <input id="flare-note" class="pt-input" type="text" placeholder="Note (optional)" maxlength="500">
+          <button id="flare-save" class="pt-primary" type="submit" disabled>Log flare</button>
+        </form>
+
+        <form id="morning-form" class="pt-card" autocomplete="off">
+          <h2>Morning check-in <span id="morning-done" class="pt-done"></span></h2>
+          <div class="pt-label">Right knee</div>
+          <div class="pt-scale" data-field="morning-right" role="radiogroup" aria-label="Right knee pain 0 to 10"></div>
+          <div class="pt-label">Left knee</div>
+          <div class="pt-scale" data-field="morning-left" role="radiogroup" aria-label="Left knee pain 0 to 10"></div>
+          <button id="morning-save" class="pt-primary" type="submit" disabled>Save morning pain</button>
+        </form>
+
+        <section class="pt-card">
+          <h2>Exercises today <span id="exercise-count" class="pt-done"></span></h2>
+          <ul id="exercise-list" class="pt-exercises"></ul>
+        </section>
+
+        <form id="lift-form" class="pt-card" autocomplete="off">
+          <h2>Lift day <span id="lift-done" class="pt-done"></span></h2>
+          <input id="lift-notes" class="pt-input" type="text" placeholder="What did you lift? e.g. light squats 3×5, bench" maxlength="500">
+          <button id="lift-save" class="pt-secondary" type="submit">Log lift day</button>
+        </form>
+
+        <section class="pt-card">
+          <h2>Logged today</h2>
+          <ul id="today-list" class="pt-entries"></ul>
+        </section>
+      </section>
+
+      <!-- ── History ───────────────────────────── -->
+      <section id="tab-history" class="pt-tab" hidden>
+        <div class="pt-chips pt-range" data-field="history-range" role="radiogroup" aria-label="Range">
+          <button type="button" data-value="14" class="selected">14 days</button>
+          <button type="button" data-value="30">30 days</button>
+          <button type="button" data-value="90">90 days</button>
+        </div>
+        <div id="history-stats" class="pt-stats"></div>
+        <section class="pt-card">
+          <h2>Morning pain</h2>
+          <div class="pt-legend">
+            <span><i class="pt-key pt-key-right"></i>Right</span>
+            <span><i class="pt-key pt-key-left"></i>Left</span>
+            <span><i class="pt-key pt-key-lift"></i>Lift day</span>
+          </div>
+          <div id="pain-chart" class="pt-chart"></div>
+          <h2 class="pt-subhead">Flares per day</h2>
+          <div id="flare-chart" class="pt-chart"></div>
+          <div id="chart-tip" class="pt-tip" hidden></div>
+        </section>
+        <section class="pt-card">
+          <h2>Flare triggers</h2>
+          <div id="trigger-bars"></div>
+        </section>
+        <details class="pt-card">
+          <summary>Table view</summary>
+          <div id="history-table"></div>
+        </details>
+        <section class="pt-card">
+          <h2>Recent entries</h2>
+          <ul id="recent-list" class="pt-entries"></ul>
+        </section>
+      </section>
+
+      <!-- ── Settings ──────────────────────────── -->
+      <section id="tab-settings" class="pt-tab" hidden>
+        <section class="pt-card">
+          <h2>Exercises</h2>
+          <div id="exercise-editor"></div>
+          <button id="add-exercise" class="pt-ghost" type="button">+ Add exercise</button>
+        </section>
+        <section class="pt-card">
+          <h2>Reminders</h2>
+          <div id="reminder-editor"></div>
+          <button id="add-reminder" class="pt-ghost" type="button">+ Add reminder</button>
+        </section>
+        <section class="pt-card">
+          <h2>Sitting breaks</h2>
+          <div id="sitting-editor"></div>
+        </section>
+        <section class="pt-card">
+          <h2>Time zone</h2>
+          <div id="tz-editor"></div>
+        </section>
+        <button id="settings-save" class="pt-primary" type="button">Save settings</button>
+
+        <section class="pt-card pt-notify">
+          <h2>Getting reminded</h2>
+          <p><strong>Calendar alarms (works now).</strong> Download the schedule above as a calendar file and add it
+            to your phone's Calendar. Every reminder becomes a repeating event with an alarm. Download it again after
+            you change the schedule; re-importing replaces the same events.</p>
+          <button id="ics-download" class="pt-secondary" type="button">Download calendar file (.ics)</button>
+          <p><strong>Push notifications.</strong> <span id="push-status"></span></p>
+          <button id="push-enable" class="pt-secondary" type="button" hidden>Enable notifications on this device</button>
+        </section>
+      </section>
+
+      <nav id="pt-tabs" aria-label="Sections">
+        <button type="button" data-tab="today" class="active">Today</button>
+        <button type="button" data-tab="history">History</button>
+        <button type="button" data-tab="settings">Settings</button>
+      </nav>
+    </div>
+
+    <div id="toast" class="pt-toast" role="status" hidden>
+      <span id="toast-text"></span>
+      <button id="toast-undo" type="button" hidden>Undo</button>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../config.local.js"></script>
+  <script src="../config.js"></script>
+  <script src="../nav.js"></script>
+  <script src="../utils.js"></script>
+  <script src="pt-core.js"></script>
+  <script src="pt-store.js"></script>
+  <script src="pt-chart.js"></script>
+  <script src="app.js"></script>
+  <script src="../health.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../sw-v2.js');
+    }
+  </script>
+</body>
+</html>
