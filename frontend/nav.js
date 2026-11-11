@@ -10,6 +10,7 @@
     { label: 'Knowledge', href: root + 'browse/knowledge/' },
     { label: 'Activity', href: root + 'browse/activity/' },
     { label: 'Jobs', href: root + 'browse/jobs/' },
+    { label: 'Tracker', href: root + 'tracker/' },
   ];
 
   var currentPath = window.location.pathname;

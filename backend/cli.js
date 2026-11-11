@@ -21,6 +21,7 @@ Resources:
   backup               Export the whole store to a local folder [--target <p>] [--force] [--config <p>]
   job                  Manage scheduled jobs (list, get, create, update, delete, run, runs)
   scheduler            Run one scheduler tick, or show what it would do (tick, status)
+  tracker              Tracker app data (list, log, summary) and push reminders (remind)
 
 Run "node backend/cli.js <resource> help" for details on each resource.
 All commands support --format json|text (text is the default human output).
@@ -143,6 +144,27 @@ Actions:
             and record state. The systemd timer runs this every 15 minutes.
   status    Show usage, what would run right now and why the rest are waiting, and any
             starved jobs. Reads usage but runs nothing.`,
+
+  tracker: `Usage: node backend/cli.js tracker <action> [options]
+
+Data logged by the tracker web app (frontend/tracker/, docs/tracker-app.md): a
+generic symptom / rehab tracker; each tracker (e.g. "knee") has its own areas,
+triggers, activities and exercises.
+
+Actions:
+  list                                List trackers (id and title).
+  log [--tracker <id>] [--days <n>]   Every entry (check-ins, flares, activities,
+                                      exercises) for the last n days (default 14),
+                                      oldest first.
+  summary [--tracker <id>] [--days <n>]
+                                      Per-day rows, flare-trigger counts, and each
+                                      activity's days vs other days (default 30).
+  remind                              Send the Web Push reminders that came due since
+                                      the last run, for every tracker. Run by a
+                                      scheduler command job every tick; needs the
+                                      VAPID_* values in .env (see docs/tracker-app.md).
+
+--tracker may be left out when there is only one tracker.`,
 };
 
 function showHelp(resource) {
@@ -188,7 +210,7 @@ function parseArgs(argv) {
   return { args, positional, rawFlags };
 }
 
-const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge', 'job', 'scheduler'];
+const KNOWN_RESOURCES = ['todo', 'capture', 'knowledge', 'job', 'scheduler', 'tracker'];
 
 // Flags accepted by every command. `--format` selects output shape; `--help`/`-h`
 // short-circuits to usage text before anything else runs.
@@ -297,6 +319,12 @@ const FLAG_SPEC = {
     tick: { flags: [], maxPositional: 2, usage: 'scheduler tick' },
     status: { flags: [], maxPositional: 2, usage: 'scheduler status' },
   },
+  tracker: {
+    list: { flags: [], maxPositional: 2, usage: 'tracker list' },
+    log: { flags: ['tracker', 'days'], maxPositional: 2, usage: 'tracker log [--tracker <id>] [--days <n>]' },
+    summary: { flags: ['tracker', 'days'], maxPositional: 2, usage: 'tracker summary [--tracker <id>] [--days <n>]' },
+    remind: { flags: [], maxPositional: 2, usage: 'tracker remind' },
+  },
 };
 
 // Arity of every flag the CLI knows, so a missing or surplus value is caught by
@@ -330,6 +358,8 @@ const FLAG_ARITY = {
   // value (non-empty required)
   action: 'value',
   category: 'value',
+  days: 'value',
+  tracker: 'value',
   detail: 'value',
   job: 'value',
   since: 'value',
@@ -974,6 +1004,113 @@ async function handleJob(storage, action, rest, args, format) {
   }
 }
 
+function trackerLabel(list, id) {
+  const item = (list || []).find((x) => x.id === id);
+  return item ? item.label : id;
+}
+
+function trackerDescribeEntry(e, settings) {
+  const note = e.note ? ` — ${e.note}` : '';
+  const areas = settings.areas || [];
+  if (e.kind === 'checkin') {
+    const scores = e.scores || {};
+    const ids = areas.length ? areas.map((a) => a.id) : Object.keys(scores);
+    return `checkin ${ids.map((id) => `${trackerLabel(areas, id)} ${scores[id] ?? '-'}`).join(', ')}${note}`;
+  }
+  if (e.kind === 'flare') {
+    const where = e.area === 'all' ? 'all areas' : trackerLabel(areas, e.area);
+    return `flare ${e.pain} ${where} — ${trackerLabel(settings.triggers, e.trigger)}${note}`;
+  }
+  if (e.kind === 'activity') return `${e.item_label || e.item_id}${e.detail ? ` — ${e.detail}` : ''}${note}`;
+  if (e.kind === 'exercise') return `exercise ${e.item_label || e.item_id}${note}`;
+  return e.kind;
+}
+
+// --tracker, or the only tracker there is. Exits 1 with the choices otherwise.
+async function resolveTracker(storage, args) {
+  const rows = await storage.listTrackerSettings();
+  const ids = rows.map((r) => r.tracker);
+  if (args.tracker !== undefined) {
+    const row = rows.find((r) => r.tracker === args.tracker);
+    if (!row) {
+      console.error(`Error: no tracker "${args.tracker}". Trackers: ${ids.join(', ') || 'none'}`);
+      process.exit(1);
+    }
+    return row;
+  }
+  if (rows.length === 1) return rows[0];
+  console.error(rows.length
+    ? `Error: pass --tracker <id> (one of: ${ids.join(', ')})`
+    : 'Error: no trackers yet. Open the tracker app once to create one.');
+  process.exit(1);
+}
+
+async function handleTracker(storage, action, args, format) {
+  if (!action || action === 'help') { showHelp('tracker'); return; }
+  const core = require('../frontend/tracker/tracker-core.js');
+  if (action === 'list') {
+    const rows = await storage.listTrackerSettings();
+    const list = rows.map((r) => ({ id: r.tracker, title: (r.settings && r.settings.title) || r.tracker }));
+    if (format === 'json') { output(list, format); return; }
+    if (!list.length) console.log('No trackers yet.');
+    for (const t of list) console.log(`${t.id}  ${t.title}`);
+  } else if (action === 'log' || action === 'summary') {
+    const days = args.days === undefined ? (action === 'log' ? 14 : 30) : Number(args.days);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) {
+      console.error(`Error: --days must be a whole number from 1 to 3650 (got "${args.days}")`);
+      process.exit(1);
+    }
+    const row = await resolveTracker(storage, args);
+    const settings = row.settings || {};
+    const today = core.trkLocalDate(Date.now());
+    const since = core.trkAddDays(today, -(days - 1));
+    const entries = await storage.listTrackerEntries(row.tracker, since);
+    if (action === 'log') {
+      if (format === 'json') { output(entries, format); return; }
+      if (!entries.length) console.log(`No ${row.tracker} entries in this range.`);
+      for (const e of entries) {
+        const time = new Date(e.occurred_at).toTimeString().slice(0, 5);
+        console.log(`${e.entry_date} ${time}  ${trackerDescribeEntry(e, settings)}`);
+      }
+      return;
+    }
+    const norm = core.trkNormalizeSettings(settings);
+    const s = core.trkSummarize(entries, norm, today, days);
+    if (format === 'json') { output(s, format); return; }
+    const fmt = (v) => (v === null || v === undefined ? '-' : String(Math.round(v * 10) / 10));
+    const short = (label) => label.split(/\s+/)[0];
+    for (const d of s.days) {
+      const scores = norm.areas.map((a) => `${short(a.label)} ${fmt(d.scores[a.id])}`).join(' ');
+      const acts = Object.keys(d.activities).map((id) => `  ${trackerLabel(norm.activities, id).toUpperCase()}${d.activities[id] ? ` ${d.activities[id]}` : ''}`).join('');
+      console.log(`${d.date}  ${scores}  flares ${d.flares}${d.flares ? ` (max ${d.maxFlare})` : ''}${acts}${d.exercises ? `  ex ${d.exercises}` : ''}`);
+    }
+    console.log(`Triggers: ${s.triggers.map((t) => `${t.label} ${t.count}`).join(', ') || 'none'}`);
+    for (const a of s.activities) {
+      console.log(`${a.label}: flares/day ${fmt(a.flaresPerDay)} vs other days ${fmt(a.flaresPerOtherDay)}; ` +
+        `next-day worst score ${fmt(a.nextWorstAfter)} vs ${fmt(a.nextWorstAfterOther)}`);
+    }
+  } else if (action === 'remind') {
+    const reminders = require('./tracker-reminders');
+    const sendPush = reminders.webPushSender();
+    const result = await reminders.sendDueReminders({ storage, sendPush, appUrl: process.env.TRACKER_APP_URL || '' });
+    await audit(storage, 'tracker remind', 'tracker', null, `sent ${result.sent}`);
+    if (format === 'json') { output(result, format); }
+    else if (!result.due.length) console.log('Nothing due.');
+    else {
+      for (const r of result.due) console.log(`Due ${r.tracker} ${r.time}: ${r.label}`);
+      console.log(`Sent ${result.sent}, failed ${result.failed}, removed ${result.removed} expired subscription(s).`);
+    }
+    if (result.errors.length) {
+      for (const e of result.errors) console.error(`Error: tracker "${e.tracker}" skipped: ${e.error}`);
+      process.exit(1);
+    }
+  } else {
+    console.error(`Unknown tracker action: ${action}\n`);
+    showHelp('tracker');
+    process.exit(1);
+  }
+}
+
 async function handleScheduler(storage, action, args, format) {
   if (!action || action === 'help') { showHelp('scheduler'); return; }
   const host = require('./scheduler-host');
@@ -1354,6 +1491,8 @@ async function main() {
       await handleJob(storage, action, rest, args, format);
     } else if (resource === 'scheduler') {
       await handleScheduler(storage, action, args, format);
+    } else if (resource === 'tracker') {
+      await handleTracker(storage, action, args, format);
     } else {
       console.error(`Unknown resource: ${resource}\n`);
       showHelp('main');

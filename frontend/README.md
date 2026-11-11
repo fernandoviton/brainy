@@ -39,6 +39,10 @@ HTML attachments (knowledge attachments, TODO collateral, capture media) open in
 
 On load the linked item is expanded (todos/knowledge) or highlighted (captures) and scrolled into view. If a linked todo or capture isn't in the default filter, it is fetched directly and shown on top. Expanding/collapsing a todo or knowledge card updates the URL hash so the current view can be copied as a link.
 
+## Tracker app
+
+`tracker/` is a separate installable app (own `manifest.json`, "Tracker") for symptom / rehab tracking: fast flare and check-in logging, history charts, editable exercises and reminders. Each tracker (e.g. knee PT) is configured in its settings; `?t=<id>` opens one. See `docs/tracker-app.md`. Try it locally without signing in at `tracker/?demo=seed`.
+
 ## Tests
 
 From the project root:

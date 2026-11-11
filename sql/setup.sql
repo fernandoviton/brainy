@@ -388,6 +388,101 @@ create policy "Users manage own brainy_scheduler_state" on brainy_scheduler_stat
   with check (auth.uid() = user_id);
 
 ----------------------------------------------------------------------
+-- Tracker app (frontend/tracker/, docs/tracker-app.md)
+--
+-- A generic symptom / rehab tracker. `tracker` is a slug naming one tracker
+-- (e.g. 'knee'); a new tracker is just a new brainy_tracker_settings row, so
+-- it needs no migration.
+--
+-- brainy_tracker_entries: one row per log event. `kind` decides the columns:
+--   checkin  scores ({area id: 0-10}, one per area in the tracker's settings)
+--   flare    pain, area (an area id or 'all'), trigger (a trigger id)
+--   activity item_id, item_label, detail   (e.g. lift day + what was lifted)
+--   exercise item_id, item_label
+-- Labels are copied onto the row so history still reads right after a
+-- rename. `entry_date` is the phone's local date, so per-day queries don't
+-- depend on time zones.
+----------------------------------------------------------------------
+create table if not exists brainy_tracker_entries (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) not null,
+  tracker text not null,
+  kind text not null check (kind in ('checkin', 'flare', 'activity', 'exercise')),
+  occurred_at timestamptz not null default now(),
+  entry_date date not null,
+  scores jsonb,
+  pain smallint check (pain between 0 and 10),
+  area text,
+  trigger text,
+  item_id text,
+  item_label text,
+  detail text,
+  note text,
+  created_at timestamptz default now(),
+
+  constraint brainy_tracker_checkin_has_scores
+    check (kind != 'checkin' or jsonb_typeof(scores) = 'object'),
+  constraint brainy_tracker_flare_has_pain
+    check (kind != 'flare' or (pain is not null and trigger is not null)),
+  constraint brainy_tracker_item_has_id
+    check (kind not in ('activity', 'exercise') or item_id is not null)
+);
+
+create index if not exists idx_brainy_tracker_entries_user_tracker_date
+  on brainy_tracker_entries (user_id, tracker, entry_date);
+
+alter table brainy_tracker_entries enable row level security;
+
+drop policy if exists "Users manage own brainy_tracker_entries" on brainy_tracker_entries;
+create policy "Users manage own brainy_tracker_entries" on brainy_tracker_entries
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- One row per tracker: title, areas, triggers, activities, exercises and the
+-- reminder schedule (shape: trkNormalizeSettings in tracker-core.js).
+-- push_checked_at is the end of the last window the push sender covered.
+create table if not exists brainy_tracker_settings (
+  user_id uuid references auth.users(id) not null,
+  tracker text not null,
+  settings jsonb not null,
+  push_checked_at timestamptz,
+  updated_at timestamptz default now(),
+  primary key (user_id, tracker)
+);
+
+drop trigger if exists brainy_tracker_settings_updated_at on brainy_tracker_settings;
+create trigger brainy_tracker_settings_updated_at
+  before update on brainy_tracker_settings
+  for each row execute function brainy_update_updated_at();
+
+alter table brainy_tracker_settings enable row level security;
+
+drop policy if exists "Users manage own brainy_tracker_settings" on brainy_tracker_settings;
+create policy "Users manage own brainy_tracker_settings" on brainy_tracker_settings
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Web Push subscriptions, one per installed device (shared by all trackers).
+create table if not exists brainy_tracker_push_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) not null,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  last_sent_at timestamptz,
+  last_error text,
+  created_at timestamptz default now()
+);
+
+alter table brainy_tracker_push_subscriptions enable row level security;
+
+drop policy if exists "Users manage own brainy_tracker_push_subscriptions" on brainy_tracker_push_subscriptions;
+create policy "Users manage own brainy_tracker_push_subscriptions" on brainy_tracker_push_subscriptions
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+----------------------------------------------------------------------
 -- Storage bucket for binary files
 ----------------------------------------------------------------------
 insert into storage.buckets (id, name, public)

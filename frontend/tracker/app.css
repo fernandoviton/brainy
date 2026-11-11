@@ -1,0 +1,412 @@
+/* ── Tracker ───────────────────────────────────── */
+
+main {
+  max-width: 480px;
+  padding: 1rem 0.9rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+h1 { margin-bottom: 1rem; font-size: 1.3rem; }
+
+/* Installed to the Home Screen it's its own app: drop the Brainy site nav. */
+@media (display-mode: standalone) {
+  #brainy-nav { display: none; }
+}
+
+/* In a browser tab the site nav is wider than a phone: scroll it, don't widen the page. */
+#brainy-nav { justify-content: flex-start; overflow-x: auto; white-space: nowrap; }
+
+/* Morning check-in floats to the top until it's logged for the day. */
+#tab-today { display: flex; flex-direction: column; }
+#tab-today .trk-first { order: -1; }
+
+[hidden] { display: none !important; }
+
+#top-bar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+#tracker-switch {
+  max-width: 9rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--paper-white);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.trk-presets { display: grid; gap: 0.6rem; margin-top: 0.8rem; }
+.trk-presets button { margin-top: 0; }
+
+#next-reminder {
+  font-size: 0.8rem;
+  color: var(--ink-light);
+}
+
+.trk-banner {
+  font-size: 0.85rem;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-ink);
+}
+
+.trk-card {
+  background: var(--paper-white);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 0.9rem 0.9rem 1rem;
+  margin-bottom: 0.85rem;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.trk-card h2 {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.trk-subhead { margin-top: 0.9rem; }
+
+.trk-done {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4A6340;
+}
+
+.trk-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin: 0.55rem 0 0.35rem;
+}
+
+/* ── 0-10 scale: big tap targets, two rows on a phone ─ */
+.trk-scale {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 4px;
+}
+
+@media (max-width: 400px) {
+  .trk-scale { grid-template-columns: repeat(6, 1fr); }
+}
+
+.trk-scale button,
+.trk-chips button,
+.trk-days button {
+  width: auto;
+  padding: 0;
+  min-height: 44px;
+  border-radius: 10px;
+  background: var(--cream);
+  border: 1.5px solid var(--border-light);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.trk-scale button.selected {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--cream);
+}
+
+/* Faint warm tint as pain rises, so the scale reads at a glance. */
+.trk-scale .trk-level-4, .trk-scale .trk-level-5, .trk-scale .trk-level-6 { background: #F6E7D8; }
+.trk-scale .trk-level-7, .trk-scale .trk-level-8, .trk-scale .trk-level-9, .trk-scale .trk-level-10 { background: #F2D5C2; }
+.trk-scale button.selected { background: var(--ink); }
+
+.trk-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.trk-chips-wrap { grid-template-columns: repeat(2, 1fr); }
+
+.trk-chips button {
+  font-size: 0.9rem;
+  padding: 0 0.5rem;
+}
+
+.trk-chips button.selected {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  color: #fff;
+}
+
+.trk-input {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  margin-top: 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 1rem; /* 16px: stops iOS zooming on focus */
+  color: var(--ink);
+  background: #fff;
+}
+
+.trk-input:focus { outline: none; border-color: var(--terracotta); }
+
+.trk-primary, .trk-secondary {
+  margin-top: 0.8rem;
+  min-height: 50px;
+}
+
+.trk-primary { background: var(--terracotta); color: #fff; }
+.trk-primary:disabled { background: var(--border); color: var(--paper-white); cursor: default; }
+.trk-secondary { background: var(--ink); color: var(--cream); }
+
+.trk-ghost {
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  color: var(--ink-light);
+  margin-top: 0.6rem;
+}
+
+/* ── Exercises ────────────────────────────────── */
+.trk-exercises, .trk-entries { list-style: none; }
+
+.trk-exercises li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border-light);
+}
+
+.trk-exercises li:first-child { border-top: none; }
+.trk-ex-name { font-weight: 600; font-size: 0.95rem; }
+.trk-ex-details { font-size: 0.8rem; color: var(--ink-light); margin-top: 0.15rem; line-height: 1.4; }
+.trk-optional { font-size: 0.7rem; font-weight: 500; color: var(--sage); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.trk-check {
+  flex: none;
+  width: 92px;
+  min-height: 44px;
+  padding: 0;
+  background: var(--cream);
+  border: 1.5px solid var(--border);
+  color: var(--ink);
+}
+
+.trk-check.done {
+  background: rgba(139, 154, 126, 0.2);
+  border-color: var(--sage);
+  color: #4A6340;
+}
+
+/* ── Entry lists ──────────────────────────────── */
+.trk-entries li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--border-light);
+  font-size: 0.88rem;
+}
+
+.trk-entries li:first-child { border-top: none; }
+.trk-when { flex: none; color: var(--ink-light); font-size: 0.78rem; min-width: 4.2rem; }
+.trk-what { flex: 1; }
+.trk-queued { font-size: 0.72rem; color: var(--warn-ink); }
+
+.trk-del {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-light);
+  font-size: 1.2rem;
+}
+
+.trk-empty { color: var(--ink-light); font-style: italic; font-size: 0.85rem; border: none !important; }
+
+/* ── History ──────────────────────────────────── */
+.trk-range { margin-bottom: 0.85rem; }
+
+.trk-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.trk-stat {
+  background: var(--paper-white);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 0.7rem;
+}
+
+.trk-stat-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-light); }
+.trk-stat-value { font-family: var(--font-display); font-size: 1.3rem; margin: 0.2rem 0; }
+.trk-stat-sub { font-size: 0.72rem; color: var(--ink-light); line-height: 1.35; }
+
+.trk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--ink-light);
+  margin-bottom: 0.3rem;
+}
+
+.trk-key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 0.35rem; }
+.trk-key-activity { height: 10px; background: rgba(139, 154, 126, 0.3); }
+
+.trk-chart svg { display: block; overflow: visible; touch-action: pan-y; }
+.trk-axis { font-size: 10px; fill: var(--ink-light); font-family: var(--font-body); }
+.trk-endlabel { font-size: 11px; font-weight: 600; fill: var(--ink); font-family: var(--font-body); }
+
+.trk-card { position: relative; }
+
+.trk-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--cream);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  max-width: 220px;
+  box-shadow: 0 4px 12px var(--shadow-md);
+}
+
+.trk-tbar {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 1.8rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  margin: 0.35rem 0;
+}
+
+.trk-tbar-track { height: 12px; }
+.trk-tbar-fill { display: block; height: 12px; min-width: 4px; background: #6B5D4F; border-radius: 0 4px 4px 0; }
+.trk-tbar-count { text-align: right; font-weight: 600; }
+
+details.trk-card summary { font-weight: 600; cursor: pointer; }
+#history-table table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.6rem; }
+#history-table th, #history-table td { text-align: left; padding: 0.3rem 0.25rem; border-bottom: 1px solid var(--border-light); }
+
+/* ── Settings ─────────────────────────────────── */
+.trk-edit-row {
+  padding: 0.5rem 0 0.75rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.trk-edit-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.trk-edit-line .trk-input { margin-top: 0; }
+.trk-time { width: 9rem; }
+.trk-num { width: 5rem; }
+
+.trk-remove, .trk-inline {
+  width: auto;
+  padding: 0.4rem 0.7rem;
+  margin: 0 0 0 auto;
+  background: transparent;
+  color: var(--ink-light);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.trk-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 0.5rem;
+}
+
+.trk-days button { min-height: 38px; font-size: 0.85rem; }
+.trk-days button.selected { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+
+.trk-hint { font-size: 0.78rem; color: var(--ink-light); margin-top: 0.4rem; }
+
+#settings-save { margin: 0 0 0.85rem; }
+
+.trk-notify p { font-size: 0.86rem; line-height: 1.5; margin-top: 0.6rem; color: var(--ink); }
+
+/* ── Bottom tab bar ───────────────────────────── */
+#trk-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: rgba(255, 253, 249, 0.96);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-light);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#trk-tabs button {
+  background: transparent;
+  border-radius: 0;
+  min-height: 56px;
+  color: var(--ink-light);
+  font-weight: 500;
+}
+
+#trk-tabs button.active { color: var(--terracotta); font-weight: 700; }
+
+/* ── Toast ────────────────────────────────────── */
+.trk-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: calc(100% - 1.8rem);
+  max-width: 440px;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--cream);
+  font-size: 0.9rem;
+  box-shadow: 0 6px 20px var(--shadow-md);
+}
+
+.trk-toast-error { background: #9B2C0A; }
+
+#toast-text { flex: 1; }
+
+#toast-undo {
+  width: auto;
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  border: 1px solid var(--cream);
+  color: var(--cream);
+}

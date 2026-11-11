@@ -1219,7 +1219,61 @@ async function saveSchedulerState(state) {
   if (error) throw error;
 }
 
+// ── Tracker app (frontend/tracker/, docs/tracker-app.md) ─────────────────
+
+const TRK_ENTRIES = 'brainy_tracker_entries';
+const TRK_SETTINGS = 'brainy_tracker_settings';
+const TRK_SUBS = 'brainy_tracker_push_subscriptions';
+
+async function listTrackerEntries(tracker, sinceDate) {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(TRK_ENTRIES).select('*')
+    .eq('user_id', userId).eq('tracker', tracker).gte('entry_date', sinceDate)
+    .order('occurred_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// Every tracker's row: { tracker, settings, push_checked_at }.
+async function listTrackerSettings() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(TRK_SETTINGS).select('tracker, settings, push_checked_at')
+    .eq('user_id', userId).order('tracker', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+async function setTrackerPushCheckedAt(tracker, iso) {
+  const userId = await getUserId();
+  const { error } = await supabase.from(TRK_SETTINGS).update({ push_checked_at: iso })
+    .eq('user_id', userId).eq('tracker', tracker);
+  if (error) throw error;
+}
+
+async function listTrackerPushSubscriptions() {
+  const userId = await getUserId();
+  const { data, error } = await supabase.from(TRK_SUBS).select('*').eq('user_id', userId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function updateTrackerPushSubscription(id, fields) {
+  const { error } = await supabase.from(TRK_SUBS).update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteTrackerPushSubscription(id) {
+  const { error } = await supabase.from(TRK_SUBS).delete().eq('id', id);
+  if (error) throw error;
+}
+
 module.exports = {
+  listTrackerEntries,
+  listTrackerSettings,
+  setTrackerPushCheckedAt,
+  listTrackerPushSubscriptions,
+  updateTrackerPushSubscription,
+  deleteTrackerPushSubscription,
   listTodos,
   getTodo,
   createTodo,
