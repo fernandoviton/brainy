@@ -388,72 +388,82 @@ create policy "Users manage own brainy_scheduler_state" on brainy_scheduler_stat
   with check (auth.uid() = user_id);
 
 ----------------------------------------------------------------------
--- Knee PT app (frontend/pt/, docs/pt-app.md)
+-- Tracker app (frontend/tracker/, docs/tracker-app.md)
 --
--- brainy_pt_entries: one row per log event. `kind` decides which columns
--- are used: morning (pain_right, pain_left), flare (pain, side, trigger),
--- lift (lift_notes), exercise (exercise_id, exercise_name). `entry_date` is
--- the phone's local date, so "per day" queries don't depend on time zones.
+-- A generic symptom / rehab tracker. `tracker` is a slug naming one tracker
+-- (e.g. 'knee'); a new tracker is just a new brainy_tracker_settings row, so
+-- it needs no migration.
+--
+-- brainy_tracker_entries: one row per log event. `kind` decides the columns:
+--   checkin  scores ({area id: 0-10}, one per area in the tracker's settings)
+--   flare    pain, area (an area id or 'all'), trigger (a trigger id)
+--   activity item_id, item_label, detail   (e.g. lift day + what was lifted)
+--   exercise item_id, item_label
+-- Labels are copied onto the row so history still reads right after a
+-- rename. `entry_date` is the phone's local date, so per-day queries don't
+-- depend on time zones.
 ----------------------------------------------------------------------
-create table if not exists brainy_pt_entries (
+create table if not exists brainy_tracker_entries (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) not null,
-  kind text not null check (kind in ('morning', 'flare', 'lift', 'exercise')),
+  tracker text not null,
+  kind text not null check (kind in ('checkin', 'flare', 'activity', 'exercise')),
   occurred_at timestamptz not null default now(),
   entry_date date not null,
-  pain_right smallint check (pain_right between 0 and 10),
-  pain_left smallint check (pain_left between 0 and 10),
+  scores jsonb,
   pain smallint check (pain between 0 and 10),
-  side text check (side in ('right', 'left', 'both')),
-  trigger text check (trigger in ('sitting', 'car', 'stairs_down', 'after_lift', 'after_pt', 'other')),
-  lift_notes text,
-  exercise_id text,
-  exercise_name text,
+  area text,
+  trigger text,
+  item_id text,
+  item_label text,
+  detail text,
   note text,
   created_at timestamptz default now(),
 
-  constraint brainy_pt_morning_has_pain
-    check (kind != 'morning' or (pain_right is not null and pain_left is not null)),
-  constraint brainy_pt_flare_has_pain
+  constraint brainy_tracker_checkin_has_scores
+    check (kind != 'checkin' or jsonb_typeof(scores) = 'object'),
+  constraint brainy_tracker_flare_has_pain
     check (kind != 'flare' or (pain is not null and trigger is not null)),
-  constraint brainy_pt_exercise_has_id
-    check (kind != 'exercise' or exercise_id is not null)
+  constraint brainy_tracker_item_has_id
+    check (kind not in ('activity', 'exercise') or item_id is not null)
 );
 
-create index if not exists idx_brainy_pt_entries_user_date
-  on brainy_pt_entries (user_id, entry_date);
+create index if not exists idx_brainy_tracker_entries_user_tracker_date
+  on brainy_tracker_entries (user_id, tracker, entry_date);
 
-alter table brainy_pt_entries enable row level security;
+alter table brainy_tracker_entries enable row level security;
 
-drop policy if exists "Users manage own brainy_pt_entries" on brainy_pt_entries;
-create policy "Users manage own brainy_pt_entries" on brainy_pt_entries
+drop policy if exists "Users manage own brainy_tracker_entries" on brainy_tracker_entries;
+create policy "Users manage own brainy_tracker_entries" on brainy_tracker_entries
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- One row per user: the editable exercise list and reminder schedule
--- (shape: ptNormalizeSettings in frontend/pt/pt-core.js). push_checked_at is
--- the end of the last window the push sender covered.
-create table if not exists brainy_pt_settings (
-  user_id uuid references auth.users(id) primary key,
+-- One row per tracker: title, areas, triggers, activities, exercises and the
+-- reminder schedule (shape: trkNormalizeSettings in tracker-core.js).
+-- push_checked_at is the end of the last window the push sender covered.
+create table if not exists brainy_tracker_settings (
+  user_id uuid references auth.users(id) not null,
+  tracker text not null,
   settings jsonb not null,
   push_checked_at timestamptz,
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  primary key (user_id, tracker)
 );
 
-drop trigger if exists brainy_pt_settings_updated_at on brainy_pt_settings;
-create trigger brainy_pt_settings_updated_at
-  before update on brainy_pt_settings
+drop trigger if exists brainy_tracker_settings_updated_at on brainy_tracker_settings;
+create trigger brainy_tracker_settings_updated_at
+  before update on brainy_tracker_settings
   for each row execute function brainy_update_updated_at();
 
-alter table brainy_pt_settings enable row level security;
+alter table brainy_tracker_settings enable row level security;
 
-drop policy if exists "Users manage own brainy_pt_settings" on brainy_pt_settings;
-create policy "Users manage own brainy_pt_settings" on brainy_pt_settings
+drop policy if exists "Users manage own brainy_tracker_settings" on brainy_tracker_settings;
+create policy "Users manage own brainy_tracker_settings" on brainy_tracker_settings
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Web Push subscriptions, one per installed device.
-create table if not exists brainy_pt_push_subscriptions (
+-- Web Push subscriptions, one per installed device (shared by all trackers).
+create table if not exists brainy_tracker_push_subscriptions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) not null,
   endpoint text not null unique,
@@ -465,10 +475,10 @@ create table if not exists brainy_pt_push_subscriptions (
   created_at timestamptz default now()
 );
 
-alter table brainy_pt_push_subscriptions enable row level security;
+alter table brainy_tracker_push_subscriptions enable row level security;
 
-drop policy if exists "Users manage own brainy_pt_push_subscriptions" on brainy_pt_push_subscriptions;
-create policy "Users manage own brainy_pt_push_subscriptions" on brainy_pt_push_subscriptions
+drop policy if exists "Users manage own brainy_tracker_push_subscriptions" on brainy_tracker_push_subscriptions;
+create policy "Users manage own brainy_tracker_push_subscriptions" on brainy_tracker_push_subscriptions
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 

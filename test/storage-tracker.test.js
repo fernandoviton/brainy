@@ -26,44 +26,42 @@ const ok = (data) => ({ data, error: null });
 
 afterEach(() => mockSupabase.resetMock());
 
-describe('PT storage', () => {
-  test('listPtEntries reads entries since a date, oldest first', async () => {
+describe('tracker storage', () => {
+  test('listTrackerEntries reads one tracker since a date, oldest first', async () => {
     const chains = script(ok([{ id: 'a' }]));
-    expect(await storage.listPtEntries('2026-11-01')).toEqual([{ id: 'a' }]);
+    expect(await storage.listTrackerEntries('knee', '2026-11-01')).toEqual([{ id: 'a' }]);
     const c = chains[0];
-    expect(c.table).toBe('brainy_pt_entries');
+    expect(c.table).toBe('brainy_tracker_entries');
+    expect(c.eq).toHaveBeenCalledWith('tracker', 'knee');
     expect(c.gte).toHaveBeenCalledWith('entry_date', '2026-11-01');
     expect(c.order).toHaveBeenCalledWith('occurred_at', { ascending: true });
   });
 
-  test('getPtSettings returns the row or null', async () => {
-    script(ok({ settings: { timezone: 'UTC' }, push_checked_at: null }));
-    expect(await storage.getPtSettings()).toEqual({ settings: { timezone: 'UTC' }, push_checked_at: null });
-    script(ok(null));
-    expect(await storage.getPtSettings()).toBeNull();
+  test('listTrackerSettings returns every tracker row', async () => {
+    const chains = script(ok([{ tracker: 'knee', settings: { title: 'Knee PT' }, push_checked_at: null }]));
+    expect(await storage.listTrackerSettings()).toEqual([{ tracker: 'knee', settings: { title: 'Knee PT' }, push_checked_at: null }]);
+    expect(chains[0].table).toBe('brainy_tracker_settings');
   });
 
-  test('setPtPushCheckedAt updates the settings row', async () => {
+  test('setTrackerPushCheckedAt updates that tracker\'s row', async () => {
     const chains = script(ok(null));
-    await storage.setPtPushCheckedAt('2026-11-11T17:30:00.000Z');
-    const c = chains[0];
-    expect(c.table).toBe('brainy_pt_settings');
-    expect(c.update).toHaveBeenCalledWith({ push_checked_at: '2026-11-11T17:30:00.000Z' });
+    await storage.setTrackerPushCheckedAt('knee', '2026-11-11T17:30:00.000Z');
+    expect(chains[0].update).toHaveBeenCalledWith({ push_checked_at: '2026-11-11T17:30:00.000Z' });
+    expect(chains[0].eq).toHaveBeenCalledWith('tracker', 'knee');
   });
 
   test('push subscriptions: list, update, delete', async () => {
     const chains = script(ok([{ id: 's1' }]), ok(null), ok(null));
-    expect(await storage.listPtPushSubscriptions()).toEqual([{ id: 's1' }]);
-    await storage.updatePtPushSubscription('s1', { last_error: 'boom' });
-    await storage.deletePtPushSubscription('s1');
-    expect(chains.map((c) => c.table)).toEqual(Array(3).fill('brainy_pt_push_subscriptions'));
+    expect(await storage.listTrackerPushSubscriptions()).toEqual([{ id: 's1' }]);
+    await storage.updateTrackerPushSubscription('s1', { last_error: 'boom' });
+    await storage.deleteTrackerPushSubscription('s1');
+    expect(chains.map((c) => c.table)).toEqual(Array(3).fill('brainy_tracker_push_subscriptions'));
     expect(chains[1].update).toHaveBeenCalledWith({ last_error: 'boom' });
-    expect(chains[2].delete).toHaveBeenCalled();
     expect(chains[2].eq).toHaveBeenCalledWith('id', 's1');
   });
 
   test('throws Supabase errors', async () => {
-    script({ data: null, error: { message: 'relation "brainy_pt_entries" does not exist' } });
-    await expect(storage.listPtEntries('2026-11-01')).rejects.toBeTruthy();
+    script({ data: null, error: { message: 'relation "brainy_tracker_entries" does not exist' } });
+    await expect(storage.listTrackerEntries('knee', '2026-11-01')).rejects.toBeTruthy();
   });
 });

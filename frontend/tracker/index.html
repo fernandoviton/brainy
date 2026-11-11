@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F7F3ED">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tracker">
+  <link rel="icon" href="../icons/icon-192.png">
+  <link rel="apple-touch-icon" href="../icons/icon-192.png">
+  <link rel="stylesheet" href="../shared.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1 id="title">Tracker</h1>
+
+    <div id="demo-banner" class="trk-banner" hidden>
+      Demo mode: entries stay in this browser only. <a href="./">Leave demo</a>
+    </div>
+
+    <div id="auth-section" hidden>
+      <p>Sign in to start tracking.</p>
+      <button id="login-btn" type="button">Sign in with Google</button>
+    </div>
+
+    <!-- First run, or "+ New tracker": pick a starting point. -->
+    <section id="start-section" class="trk-card" hidden>
+      <h2>Start a tracker</h2>
+      <p class="trk-hint">Pick a starting point. Everything (areas, triggers, exercises, reminders) can be changed later in Settings.</p>
+      <div id="preset-list" class="trk-presets"></div>
+      <button id="start-cancel" class="trk-ghost" type="button" hidden>Cancel</button>
+    </section>
+
+    <div id="app-section" hidden>
+      <div id="top-bar">
+        <span id="next-reminder"></span>
+        <select id="tracker-switch" aria-label="Tracker" hidden></select>
+        <button id="logout-btn" type="button">Sign out</button>
+      </div>
+      <div id="outbox-msg" class="trk-banner" hidden></div>
+
+      <!-- ── Today ─────────────────────────────── -->
+      <section id="tab-today" class="trk-tab">
+        <form id="flare-form" class="trk-card" autocomplete="off">
+          <h2>Flare now</h2>
+          <div class="trk-label">Pain</div>
+          <div class="trk-scale" data-field="flare-pain" role="radiogroup" aria-label="Flare pain 0 to 10"></div>
+          <div id="flare-area-wrap">
+            <div class="trk-label">Where</div>
+            <div class="trk-chips" data-field="flare-area" role="radiogroup" aria-label="Where"></div>
+          </div>
+          <div class="trk-label">Trigger</div>
+          <div class="trk-chips trk-chips-wrap" data-field="flare-trigger" role="radiogroup" aria-label="Trigger"></div>
+          <input id="flare-note" class="trk-input" type="text" placeholder="Note (optional)" maxlength="500">
+          <button id="flare-save" class="trk-primary" type="submit" disabled>Log flare</button>
+        </form>
+
+        <form id="checkin-form" class="trk-card" autocomplete="off">
+          <h2><span id="checkin-title">Check-in</span> <span id="checkin-done" class="trk-done"></span></h2>
+          <div id="checkin-scales"></div>
+          <button id="checkin-save" class="trk-primary" type="submit" disabled>Save check-in</button>
+        </form>
+
+        <section id="exercise-card" class="trk-card">
+          <h2>Exercises today <span id="exercise-count" class="trk-done"></span></h2>
+          <ul id="exercise-list" class="trk-exercises"></ul>
+        </section>
+
+        <div id="activity-cards"></div>
+
+        <section class="trk-card">
+          <h2>Logged today</h2>
+          <ul id="today-list" class="trk-entries"></ul>
+        </section>
+      </section>
+
+      <!-- ── History ───────────────────────────── -->
+      <section id="tab-history" class="trk-tab" hidden>
+        <div class="trk-chips trk-range" data-field="history-range" role="radiogroup" aria-label="Range">
+          <button type="button" data-value="14" class="selected">14 days</button>
+          <button type="button" data-value="30">30 days</button>
+          <button type="button" data-value="90">90 days</button>
+        </div>
+        <div id="history-stats" class="trk-stats"></div>
+        <section class="trk-card">
+          <h2 id="checkin-chart-title">Check-in</h2>
+          <div id="chart-legend" class="trk-legend"></div>
+          <div id="checkin-chart" class="trk-chart"></div>
+          <h2 class="trk-subhead">Flares per day</h2>
+          <div id="flare-chart" class="trk-chart"></div>
+          <div id="chart-tip" class="trk-tip" hidden></div>
+        </section>
+        <section class="trk-card">
+          <h2>Flare triggers</h2>
+          <div id="trigger-bars"></div>
+        </section>
+        <details class="trk-card">
+          <summary>Table view</summary>
+          <div id="history-table"></div>
+        </details>
+        <section class="trk-card">
+          <h2>Recent entries</h2>
+          <ul id="recent-list" class="trk-entries"></ul>
+        </section>
+      </section>
+
+      <!-- ── Settings ──────────────────────────── -->
+      <section id="tab-settings" class="trk-tab" hidden>
+        <section class="trk-card">
+          <h2>Tracker</h2>
+          <div id="general-editor"></div>
+        </section>
+        <section class="trk-card">
+          <h2>Areas</h2>
+          <p class="trk-hint">What you score at check-in, and where a flare can be (up to 4).</p>
+          <div id="area-editor"></div>
+          <button class="trk-ghost" type="button" data-add="area">+ Add area</button>
+        </section>
+        <section class="trk-card">
+          <h2>Triggers</h2>
+          <div id="trigger-editor"></div>
+          <button class="trk-ghost" type="button" data-add="trigger">+ Add trigger</button>
+        </section>
+        <section class="trk-card">
+          <h2>Activities</h2>
+          <p class="trk-hint">Days to compare against, e.g. lift days. History shows flares and next-day scores on these days vs other days.</p>
+          <div id="activity-editor"></div>
+          <button class="trk-ghost" type="button" data-add="activity">+ Add activity</button>
+        </section>
+        <section class="trk-card">
+          <h2>Exercises</h2>
+          <div id="exercise-editor"></div>
+          <button class="trk-ghost" type="button" data-add="exercise">+ Add exercise</button>
+        </section>
+        <section class="trk-card">
+          <h2>Reminders</h2>
+          <div id="reminder-editor"></div>
+          <button class="trk-ghost" type="button" data-add="reminder">+ Add reminder</button>
+        </section>
+        <section class="trk-card">
+          <h2>Movement breaks</h2>
+          <div id="breaks-editor"></div>
+        </section>
+        <section class="trk-card">
+          <h2>Time zone</h2>
+          <div id="tz-editor"></div>
+        </section>
+        <button id="settings-save" class="trk-primary" type="button">Save settings</button>
+
+        <section class="trk-card trk-notify">
+          <h2>Getting reminded</h2>
+          <p><strong>Calendar alarms (works now).</strong> Download the schedule above as a calendar file and add it
+            to your phone's Calendar. Every reminder becomes a repeating event with an alarm. Download it again after
+            you change the schedule; re-importing replaces the same events.</p>
+          <button id="ics-download" class="trk-secondary" type="button">Download calendar file (.ics)</button>
+          <p><strong>Push notifications.</strong> <span id="push-status"></span></p>
+          <button id="push-enable" class="trk-secondary" type="button" hidden>Enable notifications on this device</button>
+        </section>
+      </section>
+
+      <nav id="trk-tabs" aria-label="Sections">
+        <button type="button" data-tab="today" class="active">Today</button>
+        <button type="button" data-tab="history">History</button>
+        <button type="button" data-tab="settings">Settings</button>
+      </nav>
+    </div>
+
+    <div id="toast" class="trk-toast" role="status" hidden>
+      <span id="toast-text"></span>
+      <button id="toast-undo" type="button" hidden>Undo</button>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../config.local.js"></script>
+  <script src="../config.js"></script>
+  <script src="../nav.js"></script>
+  <script src="../utils.js"></script>
+  <script src="tracker-core.js"></script>
+  <script src="tracker-store.js"></script>
+  <script src="tracker-chart.js"></script>
+  <script src="app.js"></script>
+  <script src="../health.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../sw-v2.js');
+    }
+  </script>
+</body>
+</html>

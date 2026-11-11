@@ -34,19 +34,19 @@ function pushEvent(json) {
 }
 
 describe('sw-v2.js push', () => {
-  test('caches the PT app shell', () => {
-    expect(code).toContain("'pt/app.js'");
-    expect(code).toContain("'pt/pt-core.js'");
+  test('caches the tracker app shell', () => {
+    expect(code).toContain("'tracker/app.js'");
+    expect(code).toContain("'tracker/tracker-core.js'");
   });
 
   test('shows a declarative Web Push payload as a notification', async () => {
     const { self, listeners } = loadSw();
-    const e = pushEvent({ web_push: 8030, notification: { title: 'Knee PT', body: 'Stand up', navigate: 'https://x.github.io/brainy/pt/' } });
+    const e = pushEvent({ web_push: 8030, notification: { title: 'Knee PT', body: 'Stand up', navigate: 'https://x.github.io/brainy/tracker/' } });
     listeners.push(e.event);
     await e.done();
     expect(self.registration.showNotification).toHaveBeenCalledWith('Knee PT', expect.objectContaining({
       body: 'Stand up',
-      data: { url: 'https://x.github.io/brainy/pt/' },
+      data: { url: 'https://x.github.io/brainy/tracker/' },
     }));
   });
 
@@ -55,16 +55,16 @@ describe('sw-v2.js push', () => {
     const e = pushEvent(undefined);
     listeners.push(e.event);
     await e.done();
-    expect(self.registration.showNotification).toHaveBeenCalledWith('Knee PT', expect.any(Object));
+    expect(self.registration.showNotification).toHaveBeenCalledWith('Tracker', expect.any(Object));
   });
 
   test('a notification tap opens its URL', async () => {
     const { self, listeners } = loadSw();
     let waited;
     const close = jest.fn();
-    listeners.notificationclick({ notification: { close, data: { url: 'https://x.github.io/brainy/pt/' } }, waitUntil: (p) => { waited = p; } });
+    listeners.notificationclick({ notification: { close, data: { url: 'https://x.github.io/brainy/tracker/' } }, waitUntil: (p) => { waited = p; } });
     await waited;
     expect(close).toHaveBeenCalled();
-    expect(self.clients.openWindow).toHaveBeenCalledWith('https://x.github.io/brainy/pt/');
+    expect(self.clients.openWindow).toHaveBeenCalledWith('https://x.github.io/brainy/tracker/');
   });
 });

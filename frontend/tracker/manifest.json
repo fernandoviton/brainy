@@ -1,7 +1,7 @@
 {
-  "name": "Knee PT",
-  "short_name": "Knee PT",
-  "description": "PT reminders and fast knee-pain logging",
+  "name": "Tracker",
+  "short_name": "Tracker",
+  "description": "Symptom and rehab tracking: fast logging and reminders",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

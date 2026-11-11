@@ -73,7 +73,7 @@ So a non-zero exit here means *nothing was written* — fix the argument and re-
 - `knowledge attachment add <path> <filepath> [--replace]` — attach a file; the entry must already exist
 - `knowledge attachment remove <path> <filename>` — remove attachment
 
-**Knee PT data** (logged from the `frontend/pt/` app; see `docs/pt-app.md`): `pt log [--days <n>]` lists entries (morning pain R/L, flares with trigger, lift days, exercises done); `pt summary [--days <n>]` gives per-day rows, trigger counts and a lift-day comparison. Read these, not the `knee-rehab` TODO notes, when asked about knee pain trends.
+**Tracker data** (symptom / rehab trackers logged from the `frontend/tracker/` app, e.g. the `knee` tracker; see `docs/tracker-app.md`): `tracker list`; `tracker log [--tracker <id>] [--days <n>]` lists entries (check-in scores per area, flares with trigger, activities like lift days, exercises done); `tracker summary [--tracker <id>] [--days <n>]` gives per-day rows, trigger counts and each activity's days vs other days. `--tracker` can be left out when there's only one. Read these, not TODO notes (e.g. `knee-rehab`), when asked about symptom trends.
 
 Utilities: `check-integrity`, `promote-scheduled`, `backup`, `job`, `scheduler` (see **Scheduled jobs** below)
 

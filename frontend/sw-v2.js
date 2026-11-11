@@ -1,4 +1,4 @@
-var CACHE_NAME = 'brainy-v6';
+var CACHE_NAME = 'brainy-v7';
 var SHELL_FILES = [
   '.',
   'shared.css',
@@ -12,14 +12,14 @@ var SHELL_FILES = [
   'capture/upload.js',
   'config.js',
   'manifest.json',
-  'pt/',
-  'pt/index.html',
-  'pt/app.js',
-  'pt/app.css',
-  'pt/pt-core.js',
-  'pt/pt-store.js',
-  'pt/pt-chart.js',
-  'pt/manifest.json',
+  'tracker/',
+  'tracker/index.html',
+  'tracker/app.js',
+  'tracker/app.css',
+  'tracker/tracker-core.js',
+  'tracker/tracker-store.js',
+  'tracker/tracker-chart.js',
+  'tracker/manifest.json',
 ];
 
 self.addEventListener('install', function (e) {
@@ -57,16 +57,16 @@ self.addEventListener('fetch', function (e) {
   );
 });
 
-// Web Push (PT reminders). The sender uses the Declarative Web Push payload
+// Web Push (tracker reminders). The sender uses the Declarative Web Push payload
 // ({ web_push: 8030, notification: {...} }): iOS 18.4+ shows it without
 // running this handler; everywhere else this handler shows the same thing.
 self.addEventListener('push', function (e) {
   var payload = null;
   try { payload = e.data ? e.data.json() : null; } catch (err) { payload = null; }
   var n = (payload && payload.notification) || {};
-  var url = n.navigate || new URL('pt/', self.registration.scope).href;
-  e.waitUntil(self.registration.showNotification(n.title || 'Knee PT', {
-    body: n.body || 'Time for a knee break.',
+  var url = n.navigate || new URL('tracker/', self.registration.scope).href;
+  e.waitUntil(self.registration.showNotification(n.title || 'Tracker', {
+    body: n.body || 'Reminder',
     tag: n.tag,
     icon: new URL('icons/icon-192.png', self.registration.scope).href,
     data: { url: url },
@@ -75,7 +75,7 @@ self.addEventListener('push', function (e) {
 
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
-  var url = (e.notification.data && e.notification.data.url) || new URL('pt/', self.registration.scope).href;
+  var url = (e.notification.data && e.notification.data.url) || new URL('tracker/', self.registration.scope).href;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (wins) {
       for (var i = 0; i < wins.length; i++) {

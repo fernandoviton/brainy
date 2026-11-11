@@ -1,63 +1,74 @@
-// Knee PT — storage. Three stores share one promise-based interface:
+// Tracker — storage. Each store is bound to one tracker id and shares one
+// promise-based interface:
 //   listEntries(sinceDate) · addEntry(row) · deleteEntry(id)
-//   getSettings() · saveSettings(settings) · savePushSubscription(sub, ua)
-// ptSupabaseStore is the real one; ptLocalStore backs demo mode (?demo=1,
-// localStorage only, never touches Supabase); ptWithOutbox wraps either so
+//   getSettings() · saveSettings(settings) · listTrackers()
+//   savePushSubscription(sub, ua)
+// trkSupabaseStore is the real one; trkLocalStore backs demo mode (?demo=1,
+// localStorage only, never touches Supabase); trkWithOutbox wraps either so
 // an entry logged with no signal is kept and sent later.
 
-var PT_ENTRY_LIMIT = 2000;
-var PT_OUTBOX_KEY = 'brainy.pt.outbox';
+var TRK_ENTRY_LIMIT = 2000;
 
-function _ptCheck(res) {
+function _trkCheck(res) {
   if (res.error) throw new Error(res.error.message || String(res.error));
   return res.data;
 }
 
-function ptSupabaseStore(db, userId) {
+function trkSupabaseStore(db, userId, tracker) {
   return {
     listEntries: function (sinceDate) {
-      return db.from('brainy_pt_entries').select('*')
+      return db.from('brainy_tracker_entries').select('*')
+        .eq('tracker', tracker)
         .gte('entry_date', sinceDate)
         .order('occurred_at', { ascending: false })
-        .limit(PT_ENTRY_LIMIT)
-        .then(_ptCheck);
+        .limit(TRK_ENTRY_LIMIT)
+        .then(_trkCheck);
     },
     addEntry: function (row) {
-      var r = Object.assign({}, row, { user_id: userId });
-      return db.from('brainy_pt_entries').insert(r).select().single().then(_ptCheck);
+      var r = Object.assign({}, row, { user_id: userId, tracker: tracker });
+      return db.from('brainy_tracker_entries').insert(r).select().single().then(_trkCheck);
     },
     deleteEntry: function (id) {
-      return db.from('brainy_pt_entries').delete().eq('id', id).then(_ptCheck);
+      return db.from('brainy_tracker_entries').delete().eq('id', id).then(_trkCheck);
     },
     getSettings: function () {
-      return db.from('brainy_pt_settings').select('settings').eq('user_id', userId).maybeSingle()
-        .then(_ptCheck)
+      return db.from('brainy_tracker_settings').select('settings')
+        .eq('user_id', userId).eq('tracker', tracker).maybeSingle()
+        .then(_trkCheck)
         .then(function (row) { return row ? row.settings : null; });
     },
     saveSettings: function (settings) {
-      return db.from('brainy_pt_settings')
-        .upsert({ user_id: userId, settings: settings }, { onConflict: 'user_id' })
-        .then(_ptCheck);
+      return db.from('brainy_tracker_settings')
+        .upsert({ user_id: userId, tracker: tracker, settings: settings }, { onConflict: 'user_id,tracker' })
+        .then(_trkCheck);
+    },
+    listTrackers: function () {
+      return db.from('brainy_tracker_settings').select('tracker, settings').eq('user_id', userId)
+        .then(_trkCheck)
+        .then(function (rows) {
+          return (rows || []).map(function (r) { return { id: r.tracker, title: (r.settings && r.settings.title) || r.tracker }; });
+        });
     },
     savePushSubscription: function (sub, userAgent) {
-      return db.from('brainy_pt_push_subscriptions').upsert({
+      return db.from('brainy_tracker_push_subscriptions').upsert({
         user_id: userId,
         endpoint: sub.endpoint,
         p256dh: sub.keys.p256dh,
         auth: sub.keys.auth,
         user_agent: userAgent || null,
-      }, { onConflict: 'endpoint' }).then(_ptCheck);
+      }, { onConflict: 'endpoint' }).then(_trkCheck);
     },
   };
 }
 
-function ptLocalStore(storage) {
-  var ENTRIES = 'brainy.pt.demo.entries';
-  var SETTINGS = 'brainy.pt.demo.settings';
+function trkLocalStore(storage, tracker) {
+  var ENTRIES = 'brainy.tracker.demo.entries.' + tracker;
+  var SETTINGS = 'brainy.tracker.demo.settings';
 
   function read(key, fallback) {
     try { return JSON.parse(storage.getItem(key)) || fallback; } catch (e) { return fallback; }
   }
+  function allSettings() { return read(SETTINGS, {}); }
 
   return {
     listEntries: function (sinceDate) {
@@ -73,14 +84,19 @@ function ptLocalStore(storage) {
       return Promise.resolve(saved);
     },
     deleteEntry: function (id) {
-      var rows = read(ENTRIES, []).filter(function (e) { return e.id !== id; });
-      storage.setItem(ENTRIES, JSON.stringify(rows));
+      storage.setItem(ENTRIES, JSON.stringify(read(ENTRIES, []).filter(function (e) { return e.id !== id; })));
       return Promise.resolve();
     },
-    getSettings: function () { return Promise.resolve(read(SETTINGS, null)); },
+    getSettings: function () { return Promise.resolve(allSettings()[tracker] || null); },
     saveSettings: function (settings) {
-      storage.setItem(SETTINGS, JSON.stringify(settings));
+      var all = allSettings();
+      all[tracker] = settings;
+      storage.setItem(SETTINGS, JSON.stringify(all));
       return Promise.resolve();
+    },
+    listTrackers: function () {
+      var all = allSettings();
+      return Promise.resolve(Object.keys(all).map(function (id) { return { id: id, title: all[id].title || id }; }));
     },
     savePushSubscription: function () { return Promise.resolve(); },
   };
@@ -88,21 +104,22 @@ function ptLocalStore(storage) {
 
 // Only connectivity failures are worth queueing; anything else (RLS, a bad
 // value) would fail the same way on retry, so it surfaces now.
-function _ptIsNetworkError(err) {
+function _trkIsNetworkError(err) {
   return err instanceof TypeError || /fetch|network|offline|load failed/i.test(err && err.message);
 }
 
-function ptWithOutbox(inner, storage) {
+function trkWithOutbox(inner, storage, tracker) {
+  var KEY = 'brainy.tracker.outbox.' + tracker;
   function read() {
-    try { return JSON.parse(storage.getItem(PT_OUTBOX_KEY)) || []; } catch (e) { return []; }
+    try { return JSON.parse(storage.getItem(KEY)) || []; } catch (e) { return []; }
   }
-  function write(rows) { storage.setItem(PT_OUTBOX_KEY, JSON.stringify(rows)); }
+  function write(rows) { storage.setItem(KEY, JSON.stringify(rows)); }
 
   var wrapped = Object.assign({}, inner);
 
   wrapped.addEntry = function (row) {
     return inner.addEntry(row).catch(function (err) {
-      if (!_ptIsNetworkError(err)) throw err;
+      if (!_trkIsNetworkError(err)) throw err;
       var rows = read();
       rows.push(row);
       write(rows);
@@ -132,9 +149,5 @@ function ptWithOutbox(inner, storage) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    ptSupabaseStore: ptSupabaseStore,
-    ptLocalStore: ptLocalStore,
-    ptWithOutbox: ptWithOutbox,
-  };
+  module.exports = { trkSupabaseStore: trkSupabaseStore, trkLocalStore: trkLocalStore, trkWithOutbox: trkWithOutbox };
 }
