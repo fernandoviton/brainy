@@ -12,6 +12,13 @@ h1 { margin-bottom: 1rem; font-size: 1.3rem; }
   #brainy-nav { display: none; }
 }
 
+/* In a browser tab the site nav is wider than a phone: scroll it, don't widen the page. */
+#brainy-nav { justify-content: flex-start; overflow-x: auto; white-space: nowrap; }
+
+/* Morning check-in floats to the top until it's logged for the day. */
+#tab-today { display: flex; flex-direction: column; }
+#tab-today .pt-first { order: -1; }
+
 [hidden] { display: none !important; }
 
 #top-bar {
@@ -304,7 +311,7 @@ details.pt-card summary { font-weight: 600; cursor: pointer; }
 }
 
 .pt-edit-line .pt-input { margin-top: 0; }
-.pt-time { width: 7.5rem; }
+.pt-time { width: 9rem; }
 .pt-num { width: 5rem; }
 
 .pt-remove, .pt-inline {

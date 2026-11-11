@@ -135,6 +135,7 @@ function ptWireForms() {
   ptPicker('flare-trigger', function (v) { pt.flare.trigger = v; ptUpdateButtons(); });
   ptPicker('morning-right', function (v) { pt.morning.right = +v; ptUpdateButtons(); });
   ptPicker('morning-left', function (v) { pt.morning.left = +v; ptUpdateButtons(); });
+  ptPicker('history-range', function (v) { pt.range = +v; ptRenderHistory(); });
 
   $('flare-form').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -221,6 +222,7 @@ function ptRenderToday() {
 
   var morning = todays.filter(function (e) { return e.kind === 'morning'; })[0];
   $('morning-done').textContent = morning ? '✓ R ' + morning.pain_right + ' · L ' + morning.pain_left : '';
+  $('morning-form').classList.toggle('pt-first', !morning && new Date().getHours() < 12);
   var lifts = todays.filter(function (e) { return e.kind === 'lift'; });
   $('lift-done').textContent = lifts.length ? '✓ logged' : '';
 
