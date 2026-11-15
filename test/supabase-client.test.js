@@ -3,7 +3,7 @@
 // still unused, so nothing may ever rotate the session on its own: one
 // rotation revokes the .env token for every machine ("Invalid Refresh Token:
 // Already Used"). supabase-js auto-rotates about an hour into any long-running
-// process (e.g. the trip-planner server) unless told not to.
+// process unless told not to.
 
 function loadClient({ refreshSession }) {
   process.env.SUPABASE_URL = 'https://example.supabase.co';

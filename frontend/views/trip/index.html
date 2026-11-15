@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trip planner</title>
+  <meta name="theme-color" content="#F7F3ED">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A7%B3%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="mock-banner" hidden>Mock mode: fake demo data, kept in memory only (no Supabase config on localhost).</div>
+
+  <section id="auth-section" hidden>
+    <h1>Trip planner</h1>
+    <p>Sign in to open the trip plan.</p>
+    <button id="login-btn" type="button" class="primary">Sign in with Google</button>
+  </section>
+
+  <div id="app" hidden>
+    <header id="top">
+      <div class="brand">
+        <h1 id="trip-title">Trip planner</h1>
+        <div id="trip-sub" class="muted"></div>
+      </div>
+      <nav id="tabs">
+        <a data-tab="overview">Overview</a>
+        <a data-tab="calendar">Calendar</a>
+        <a data-tab="decisions">Decisions</a>
+        <a data-tab="map">Map</a>
+        <a data-tab="budget">Budget</a>
+        <a data-tab="todo">Deadlines &amp; waiting</a>
+        <a data-tab="research">Research</a>
+        <a data-tab="activity">Comments &amp; activity</a>
+      </nav>
+      <div class="who">
+        <label for="who-select" class="muted">Reviewing as</label>
+        <select id="who-select"></select>
+        <button id="reload-btn" type="button" title="Reload from Brainy">⟳</button>
+        <button id="logout-btn" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main id="view"><p class="muted">Loading the plan from Brainy…</p></main>
+  </div>
+
+  <div id="drawer-backdrop" hidden></div>
+  <aside id="drawer" hidden aria-live="polite">
+    <button id="drawer-close" type="button" aria-label="Close">×</button>
+    <div id="drawer-body"></div>
+  </aside>
+  <div id="toast" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../config.local.js"></script>
+  <script src="../../config.js"></script>
+  <script src="../../nav.js"></script>
+  <script src="core.js"></script>
+  <script src="entry-store.js"></script>
+  <script src="mock-client.js"></script>
+  <script src="fixture.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -6,7 +6,7 @@ const { supabase, login } = require('./supabase-client');
 const { storageSafeFilename, assertSafeStorageKey } = require('./storage-keys');
 
 // login() caches the session and re-signs in when it expires, so a
-// long-running process (trip-planner server) keeps working past the hour.
+// long-running process keeps working past the hour.
 async function getUserId() {
   const user = await login();
   return user.id;

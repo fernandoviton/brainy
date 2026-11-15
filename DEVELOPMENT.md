@@ -28,7 +28,9 @@ cd frontend && python -m http.server 8080 --bind 127.0.0.1   # python3 on Linux/
 
 Then open `http://127.0.0.1:8080/` (browse pages under `/browse/todos/`, `/browse/captures/`, `/browse/knowledge/`, `/browse/jobs/`). It serves working-tree files directly, so edits show up on a browser refresh — no restart needed.
 
-Deep linking: each browse page reads a query param and auto-opens the matching item — `?todo=<name>`, `?capture=<id>`, `?knowledge=<path>`.
+Deep linking: each browse page reads a hash param and auto-opens the matching item — `#todo=<name>`, `#capture=<id>`, `#knowledge=<path>`.
+
+The trip planner view lives at `/views/trip/#entry=<trip>/planner.md` (decisions, options, votes, calendar, map, budget over a knowledge entry; see `frontend/views/trip/README.md`). With no `config.local.js` it runs in **mock mode** on localhost against a fake fixture — handy for UI work without touching real data.
 
 `scripts/inject-config.js` bakes `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` env vars into `config.js` for hosted deploys; not needed locally when `config.local.js` is present.
 

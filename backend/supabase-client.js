@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 // Every process signs in by refreshing the one token in .env. Supabase keeps
 // honoring that token only while the token it rotated into stays unused, so
 // nothing here may rotate the session itself: supabase-js would do it about an
-// hour into any long-running process (e.g. the trip-planner server), revoking
+// hour into any long-running process, revoking
 // the .env token everywhere ("Invalid Refresh Token: Already Used"). login()
 // signs in again from .env instead when the access token runs out.
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
