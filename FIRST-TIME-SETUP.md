@@ -80,6 +80,13 @@ redirects back to `http://localhost:3000/auth/callback`. Use either:
   `ssh -L 3000:localhost:3000 <user>@<host>`, run `node scripts/google-login.js` in that
   session, and open `http://localhost:3000` in your **local** browser. The callback goes
   through the tunnel to the remote script.
+  - If an agent already started the script on the remote machine (it does this when it hits
+    an expired login), you only need the tunnel: `ssh -N -L 3000:localhost:3000 <host>`. Any
+    account you can SSH in with works, since the tunnel just forwards to the VM's port 3000.
+    `-N` keeps the window open without a shell. Leave it open until the page says you're
+    signed in, then close it with Ctrl+C.
+  - Local port 3000 has to be free on your computer, because Google redirects back to
+    exactly `localhost:3000`.
 
 Either way, the token is written to the **remote** machine's `.env`.
 
@@ -88,7 +95,7 @@ Either way, the token is written to the **remote** machine's `.env`.
 The token doesn't expire on a timer. It stops working when the session is ended: a
 global sign-out, revocation in the Supabase dashboard, or a session time limit if one is
 configured there. You'll see `Invalid Refresh Token` from the CLI, and the Stop hook will
-block with a reminder. To fix it, re-run the same script on that machine:
+show a reminder (it warns, it doesn't block). To fix it, re-run the same script on that machine:
 
 ```bash
 node scripts/google-login.js

@@ -50,7 +50,7 @@ Deep linking: each browse page reads a query param and auto-opens the matching i
   - `frontend/health.js` — the site-wide scheduler health banner and nav badges, loaded on every page after its `app.js`.
   - `tools/fetch-capture-media.js` — downloads a capture's media to `tmp/` so agent jobs can read it without network tools.
   - **Audit trail:** `audit()` in `cli.js` records every CLI write made while `BRAINY_RUN_ID` is set. A new write command must call it, or agent runs can't be checked.
-- `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers.
+- `.claude/hooks/*.js` — Claude Code hooks, plain Node so they run on every OS. `scripts/setup-hooks.js` registers them per checkout; add new hooks there (and to its test), not as `.bat`/shell wrappers. **A Stop hook must never return `decision: "block"` for a condition the agent can't fix itself** (expired login, missing `.env`, anything that needs the owner). A block makes the agent continue, its next stop is blocked again, and the session loops forever. Report it with a `systemMessage` instead, which the owner sees directly. Unit-test the decision logic (see `test/stop-check-hook.test.js`).
 - `scripts/google-login.js` — CLI Google sign-in; writes `SUPABASE_REFRESH_TOKEN` to `.env`. `scripts/open-browser.js` is its cross-platform browser launcher.
 - `sql/setup.sql` — canonical schema. Idempotent, safe to re-run.
 
