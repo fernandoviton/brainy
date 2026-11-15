@@ -7,6 +7,9 @@ nul
 # Claude Code
 .claude/settings.local.json
 
+# Playwright MCP console logs and snapshots
+.playwright-mcp/
+
 # Editor
 *.swp
 *.swo
