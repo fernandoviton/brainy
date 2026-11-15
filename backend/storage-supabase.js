@@ -5,13 +5,11 @@
 const { supabase, login } = require('./supabase-client');
 const { storageSafeFilename, assertSafeStorageKey } = require('./storage-keys');
 
-let _userId = null;
-
+// login() caches the session and re-signs in when it expires, so a
+// long-running process (trip-planner server) keeps working past the hour.
 async function getUserId() {
-  if (_userId) return _userId;
   const user = await login();
-  _userId = user.id;
-  return _userId;
+  return user.id;
 }
 
 // Every write to brainy_files goes through here so unsafe keys are caught

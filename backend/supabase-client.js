@@ -10,13 +10,29 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   );
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Every process signs in by refreshing the one token in .env. Supabase keeps
+// honoring that token only while the token it rotated into stays unused, so
+// nothing here may rotate the session itself: supabase-js would do it about an
+// hour into any long-running process (e.g. the trip-planner server), revoking
+// the .env token everywhere ("Invalid Refresh Token: Already Used"). login()
+// signs in again from .env instead when the access token runs out.
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { autoRefreshToken: false },
+});
+
+// Must exceed supabase-js's own 90s margin: inside it, any request rotates the
+// session lazily even with autoRefreshToken off.
+const EXPIRY_MARGIN_SECONDS = 5 * 60;
+let _user = null;
+let _expiresAt = 0;
 
 /**
  * Log in using a stored Supabase refresh token (from a prior Google OAuth session).
  * Run `node scripts/google-login.js` once to obtain the token.
+ * Reuses the current session until its access token is about to expire.
  */
 async function login() {
+  if (_user && Date.now() / 1000 < _expiresAt - EXPIRY_MARGIN_SECONDS) return _user;
   const { SUPABASE_REFRESH_TOKEN } = process.env;
   if (!SUPABASE_REFRESH_TOKEN) {
     throw new Error(
@@ -27,7 +43,9 @@ async function login() {
     refresh_token: SUPABASE_REFRESH_TOKEN,
   });
   if (error) throw error;
-  return data.user;
+  _user = data.user;
+  _expiresAt = data.session.expires_at;
+  return _user;
 }
 
 module.exports = { supabase, login };
