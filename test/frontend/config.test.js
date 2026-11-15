@@ -34,6 +34,7 @@ describe('frontend config', () => {
     );
     expect(raw).toContain("CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || ''");
     expect(raw).toContain("CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || ''");
+    expect(raw).toContain("CONFIG.VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || ''");
   });
 });
 

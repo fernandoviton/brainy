@@ -7,6 +7,7 @@ const script = path.join(__dirname, '../../scripts/inject-config.js');
 const template = `var CONFIG = CONFIG || {};
 CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || '';
 CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
+CONFIG.VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || '';
 `;
 
 // Name must not collide with other suites running in parallel jest workers
@@ -43,6 +44,13 @@ describe('inject-config script', () => {
     const result = fs.readFileSync(tmp, 'utf8');
     expect(result).toContain("CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL || ''");
     expect(result).toContain("CONFIG.SUPABASE_PUBLISHABLE_KEY = CONFIG.SUPABASE_PUBLISHABLE_KEY || ''");
+    fs.unlinkSync(tmp);
+  });
+
+  test('injects the optional VAPID public key for the PT app push', () => {
+    const tmp = writeTempConfig();
+    execFileSync('node', [script, tmp], { env: { ...process.env, VAPID_PUBLIC_KEY: 'BPub-key_1' } });
+    expect(fs.readFileSync(tmp, 'utf8')).toContain("CONFIG.VAPID_PUBLIC_KEY = CONFIG.VAPID_PUBLIC_KEY || 'BPub-key_1'");
     fs.unlinkSync(tmp);
   });
 });
