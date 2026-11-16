@@ -32,7 +32,7 @@ Deep linking: each browse page reads a hash param and auto-opens the matching it
 
 The trip planner view lives at `/views/trip/#entry=<trip>/planner.md` (decisions, options, votes, calendar, map, budget over a knowledge entry; see `frontend/views/trip/README.md`). With no `config.local.js` it runs in **mock mode** on localhost against a fake fixture — handy for UI work without touching real data.
 
-The TODO board lives at `/views/board/` (TODOs in columns by status; see `frontend/README.md`). It also runs in mock mode with no `config.local.js`, against `views/board/fixture.js`.
+The TODOs page (`/browse/todos/`) is a board: TODOs in columns by status, with a details drawer and an Archived view (see `frontend/README.md`). It also runs in mock mode with no `config.local.js`, against `browse/todos/fixture.js`.
 
 `scripts/inject-config.js` bakes `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` env vars into `config.js` for hosted deploys; not needed locally when `config.local.js` is present.
 

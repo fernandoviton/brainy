@@ -6,7 +6,6 @@
   var links = [
     { label: 'Capture', href: root + 'capture/' },
     { label: 'TODOs', href: root + 'browse/todos/' },
-    { label: 'Board', href: root + 'views/board/' },
     { label: 'Captures', href: root + 'browse/captures/' },
     { label: 'Knowledge', href: root + 'browse/knowledge/' },
     { label: 'Trips', href: root + 'views/trip/' },

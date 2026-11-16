@@ -1,22 +1,22 @@
 /**
  * @jest-environment jsdom
- * @jest-environment-options {"url": "http://localhost/views/board/"}
+ * @jest-environment-options {"url": "http://localhost/browse/todos/"}
  */
 // Smoke test: load the TODO board page in mock mode (localhost, no Supabase
 // config) and in signed-in mode with a mocked auth. Everything is fake data.
 const fs = require('fs');
 const path = require('path');
 
-const DIR = path.join(__dirname, '../../../frontend/views/board');
-const LOCAL = ['../trip/mock-client.js', 'core.js', 'fixture.js', 'app.js'];
+const DIR = path.join(__dirname, '../../../frontend/browse/todos');
+const LOCAL = ['../../utils.js', '../../views/trip/mock-client.js', 'core.js', 'detail.js', 'fixture.js', 'app.js'];
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
-const B = require('../../../frontend/views/board/core');
+const B = require('../../../frontend/browse/todos/core');
 
 function loadPage(hash, config) {
   window.CONFIG = config || {};
   const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
   document.body.innerHTML = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-  window.history.replaceState(null, '', '/views/board/' + (hash || ''));
+  window.history.replaceState(null, '', '/browse/todos/' + (hash || ''));
   window.eval(fs.readFileSync(path.join(DIR, '../../config.js'), 'utf8'));
   LOCAL.forEach((f) => window.eval(fs.readFileSync(path.join(DIR, f), 'utf8')));
 }
@@ -65,12 +65,12 @@ describe('mock mode', () => {
     expect(active).toEqual(B.sortCards(rows).map((t) => t.name));
   });
 
-  test('a card shows name (linking to the TODOs page), summary, priority, due and category', async () => {
+  test('a card shows name (opening its details), summary, priority, due and category', async () => {
     loadPage();
     await flush();
     const t = window.__board.todos().find((r) => r.due && r.category && r.summary);
     const c = card(t.name);
-    expect(c.querySelector('a.card-name').getAttribute('href')).toBe('../../browse/todos/#todo=' + encodeURIComponent(t.name));
+    expect(c.querySelector('a.card-name').getAttribute('href')).toBe('#todo=' + encodeURIComponent(t.name));
     expect(c.textContent).toContain(t.summary);
     expect(c.querySelector('.badge.prio').textContent).toBe(t.priority);
     expect(c.querySelector('.category').textContent).toBe(t.category);
@@ -198,6 +198,78 @@ describe('mock mode', () => {
   });
 });
 
+describe('details drawer and archive (mock mode)', () => {
+  const drawer = () => $('#detail');
+  const go = async (hash) => { window.location.hash = hash; window.dispatchEvent(new HashChangeEvent('hashchange')); await flush(); };
+
+  test('clicking a card name opens its details: notes, text and file attachments', async () => {
+    loadPage();
+    await flush();
+    card('demo-fix-faucet').querySelector('a.card-name').click();
+    await flush();
+    expect(window.location.hash).toBe('#todo=demo-fix-faucet');
+    expect(drawer().hidden).toBe(false);
+    expect($('#detail-title').textContent).toBe('demo-fix-faucet');
+    expect($('#detail-body').textContent).toMatch(/Fix the pretend dripping faucet/);
+    expect($('#detail-body .card-notes').textContent).toMatch(/Buy a demo washer/);
+    expect($('#detail-body .collateral-box-filename').textContent).toBe('parts.md');
+    expect($('#detail-body [data-storage-path], #detail-body a.collateral-file-link')).not.toBeNull();
+  });
+
+  test('closing the drawer drops #todo= from the hash but keeps the filters', async () => {
+    loadPage('#priority=P1&todo=demo-fix-faucet');
+    await flush();
+    expect(drawer().hidden).toBe(false);
+    $('#detail-close').click();
+    await flush();
+    expect(drawer().hidden).toBe(true);
+    expect(window.location.hash).toBe('#priority=P1');
+  });
+
+  test('a #todo= hash change (a cross-reference link) opens that TODO without a reload', async () => {
+    loadPage();
+    await flush();
+    await go('#todo=demo-plan-picnic');
+    expect($('#detail-title').textContent).toBe('demo-plan-picnic');
+  });
+
+  test('a link to an archived TODO falls back to the archive, using its collateral snapshot', async () => {
+    loadPage('#todo=demo-old-taxes');
+    await flush();
+    expect($('#detail-title').textContent).toBe('demo-old-taxes');
+    expect($('#detail-body').textContent).toMatch(/Archived/);
+    expect($('#detail-body').textContent).toMatch(/Filed the pretend return/);
+    expect($('#detail-body').textContent).toMatch(/\(content not preserved\)/);
+  });
+
+  test('an unknown name says so', async () => {
+    loadPage('#todo=no-such-todo');
+    await flush();
+    expect($('#detail-body').textContent).toMatch(/not found/i);
+  });
+
+  test('the Archived view lists archive entries instead of the board, and search filters them', async () => {
+    loadPage();
+    await flush();
+    expect($('#archived-toggle').getAttribute('href')).toBe('#archived=1');
+    await go('#archived=1');
+    expect($('#board').hidden).toBe(true);
+    expect($('#due-strip').hidden).toBe(true);
+    expect($('#archive').hidden).toBe(false);
+    expect($$('#archive .archive-item').map((e) => e.dataset.name)).toEqual(['demo-old-taxes', 'demo-old-move']);
+    expect($('#archived-toggle').getAttribute('href')).toBe('#');
+    await go('#archived=1&q=move');
+    expect($$('#archive .archive-item').map((e) => e.dataset.name)).toEqual(['demo-old-move']);
+    $('#archive .archive-item a').click();
+    await flush();
+    expect(window.location.hash).toBe('#q=move&todo=demo-old-move&archived=1');
+    expect($('#detail-title').textContent).toBe('demo-old-move');
+    await go('');
+    expect($('#board').hidden).toBe(false);
+    expect($('#archive').hidden).toBe(true);
+  });
+});
+
 describe('signed-in mode (Supabase config present)', () => {
   const CONFIG = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'k' };
   let auth;
@@ -205,7 +277,7 @@ describe('signed-in mode (Supabase config present)', () => {
 
   beforeEach(() => {
     const { createMockClient } = require('../../../frontend/views/trip/mock-client');
-    const fixture = require('../../../frontend/views/board/fixture');
+    const fixture = require('../../../frontend/browse/todos/fixture');
     client = createMockClient(fixture.rows(B.localToday()), {
       table: 'brainy_todos',
       check: (r) => (r.status === 'scheduled' && !r.scheduled_date ? 'violates brainy_scheduled_needs_date' : null),
@@ -225,7 +297,7 @@ describe('signed-in mode (Supabase config present)', () => {
     expect($('#app').hidden).toBe(true);
     expect($('#mock-banner').hidden).toBe(true);
     $('#login-btn').click();
-    expect(auth.signInWithOAuth).toHaveBeenCalledWith({ provider: 'google', options: { redirectTo: 'http://localhost/views/board/' } });
+    expect(auth.signInWithOAuth).toHaveBeenCalledWith({ provider: 'google', options: { redirectTo: 'http://localhost/browse/todos/' } });
     expect(window.sessionStorage.getItem('board.hash')).toBe('#priority=P1');
   });
 
@@ -292,6 +364,22 @@ describe('signed-in mode (Supabase config present)', () => {
     expect(client.calls.length).toBe(before + 1);
   });
 
+  test('file attachments get signed URLs from the brainy_files bucket', async () => {
+    const fixture = require('../../../frontend/browse/todos/fixture');
+    const { createMockClient } = require('../../../frontend/views/trip/mock-client');
+    client = createMockClient(fixture.rows(B.localToday()), { table: 'brainy_todos', tables: fixture.tables() });
+    client.auth = auth;
+    const createSignedUrl = jest.fn(() => Promise.resolve({ data: { signedUrl: 'https://signed.example/photo.jpg' } }));
+    client.storage = { from: jest.fn(() => ({ createSignedUrl })) };
+    loadPage('#todo=demo-fix-faucet', CONFIG);
+    session({ user: { id: 'u' } });
+    await flush();
+    await flush();
+    expect(client.storage.from).toHaveBeenCalledWith('brainy_files');
+    expect(createSignedUrl).toHaveBeenCalledWith('todos/demo-4/photo.jpg', 3600);
+    expect($('#detail-body a.collateral-file-link').getAttribute('href')).toBe('https://signed.example/photo.jpg');
+  });
+
   test('sign out ends only this browser session', () => {
     loadPage('', CONFIG);
     $('#logout-btn').click();
@@ -300,7 +388,7 @@ describe('signed-in mode (Supabase config present)', () => {
 });
 
 test('fixture is fake and covers every status', () => {
-  const fixture = require('../../../frontend/views/board/fixture');
+  const fixture = require('../../../frontend/browse/todos/fixture');
   const rows = fixture.rows('2030-01-10');
   expect(new Set(rows.map((r) => r.status))).toEqual(new Set(B.STATUSES));
   rows.forEach((r) => expect(r.status === 'scheduled').toBe(!!r.scheduled_date));

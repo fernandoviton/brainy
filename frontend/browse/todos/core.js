@@ -116,10 +116,10 @@
     return b;
   }
 
-  var HASH_KEYS = ['priority', 'category', 'q'];
+  var HASH_KEYS = ['priority', 'category', 'q', 'todo', 'archived'];
 
   function parseHash(hash) {
-    var out = { priority: '', category: '', q: '' };
+    var out = { priority: '', category: '', q: '', todo: '', archived: '' };
     (hash || '').replace(/^#/, '').split('&').forEach(function (part) {
       if (!part) return;
       var i = part.indexOf('=');
@@ -131,6 +131,7 @@
       out[key] = value;
     });
     if (PRIORITIES.indexOf(out.priority) === -1) out.priority = '';
+    if (out.archived !== '1') out.archived = '';
     return out;
   }
 

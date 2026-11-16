@@ -6,57 +6,75 @@
   <title>Brainy — TODOs</title>
   <meta name="theme-color" content="#F7F3ED">
   <link rel="icon" href="../../icons/icon-192.png">
-  <link rel="stylesheet" href="../../shared.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <main>
+  <div id="mock-banner" hidden>Mock mode: fake demo TODOs, kept in memory only (no Supabase config on localhost).</div>
+
+  <section id="auth-section" hidden>
     <h1>TODOs</h1>
+    <p>Sign in to open your TODOs.</p>
+    <button id="login-btn" type="button" class="primary">Sign in with Google</button>
+  </section>
 
-    <div id="auth-section">
-      <p>Sign in to view your TODOs.</p>
-      <button id="login-btn" type="button">Sign in with Google</button>
-    </div>
-
-    <div id="content-section" style="display:none">
-      <div id="top-bar"><button id="logout-btn" type="button">Sign out</button></div>
-
+  <div id="app" hidden>
+    <header id="top">
+      <h1>TODOs</h1>
       <div id="filters">
-        <div class="filter-group">
-          <span class="filter-label">Status</span>
-          <!-- "All" spans the live statuses to its right, up to the divider.
-               Archived sits past the divider because it is a separate store,
-               not one more status All rolls up. -->
-          <div class="filter-pills" id="status-filter">
-            <button class="pill" data-value="" title="Every live TODO — inbox, active, later and scheduled. Does not include archived.">All</button>
-            <button class="pill" data-value="inbox">Inbox</button>
-            <button class="pill active" data-value="active">Active</button>
-            <button class="pill" data-value="later">Later</button>
-            <button class="pill" data-value="scheduled">Scheduled</button>
-            <span class="pill-divider" aria-hidden="true"></span>
-            <button class="pill pill-archived" data-value="archived" title="Completed and archived TODOs, kept separately — these are not included in All.">Archived</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">Search</span>
-          <input type="text" id="text-search" placeholder="Search…" autocomplete="off">
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">Priority</span>
-          <div class="filter-pills" id="priority-filter">
-            <button class="pill active" data-value="">All</button>
-            <button class="pill" data-value="P0">P0</button>
-            <button class="pill" data-value="P1">P1</button>
-            <button class="pill" data-value="P2">P2</button>
-            <button class="pill" data-value="P3">P3</button>
-          </div>
-        </div>
+        <select id="f-priority" aria-label="Priority filter">
+          <option value="">All priorities</option>
+          <option value="P0">P0</option>
+          <option value="P1">P1</option>
+          <option value="P2">P2</option>
+          <option value="P3">P3</option>
+        </select>
+        <select id="f-category" aria-label="Category filter"><option value="">All categories</option></select>
+        <input type="search" id="f-q" placeholder="Search name or summary…" autocomplete="off" aria-label="Search">
       </div>
+      <div class="actions">
+        <a id="archived-toggle" class="button-link" href="#archived=1">Archived</a>
+        <button id="reload-btn" type="button" title="Reload from Brainy">⟳</button>
+        <button id="logout-btn" type="button">Sign out</button>
+      </div>
+    </header>
 
-      <div id="cards"></div>
-      <div id="status-msg"></div>
+    <main>
+      <div id="limit-warning" hidden></div>
+      <section id="due-strip" aria-label="Due soon"></section>
+      <div id="board">
+        <section class="column" data-status="inbox"><h2>Inbox <span class="count">0</span></h2><div class="cards"></div></section>
+        <section class="column" data-status="active"><h2>Active <span class="count">0</span></h2><div class="cards"></div></section>
+        <section class="column" data-status="later"><h2>Later <span class="count">0</span></h2><div class="cards"></div></section>
+        <section class="column" data-status="scheduled"><h2>Scheduled <span class="count">0</span></h2><div class="cards"></div></section>
+      </div>
+      <section id="archive" hidden aria-label="Archived TODOs">
+        <h2>Archived <span class="count">0</span></h2>
+        <ul class="archive-list"></ul>
+      </section>
+      <p id="message" class="muted"></p>
+    </main>
+  </div>
+
+  <div id="date-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="date-title">
+    <form id="date-form">
+      <h3 id="date-title">Schedule for</h3>
+      <input type="date" id="date-input">
+      <p id="date-error" class="error" hidden>Pick a date.</p>
+      <div class="dialog-buttons">
+        <button type="button" id="date-cancel">Cancel</button>
+        <button type="button" id="date-ok" class="primary">Schedule</button>
+      </div>
+    </form>
+  </div>
+  <div id="detail-backdrop" hidden></div>
+  <aside id="detail" hidden aria-labelledby="detail-title">
+    <div class="detail-head">
+      <h2 id="detail-title"></h2>
+      <button id="detail-close" type="button" aria-label="Close">×</button>
     </div>
-  </main>
+    <div id="detail-body"></div>
+  </aside>
+  <div id="toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
@@ -65,7 +83,10 @@
   <script src="../../config.js"></script>
   <script src="../../nav.js"></script>
   <script src="../../utils.js"></script>
+  <script src="../../views/trip/mock-client.js"></script>
+  <script src="core.js"></script>
+  <script src="detail.js"></script>
+  <script src="fixture.js"></script>
   <script src="app.js"></script>
-  <script src="../../health.js"></script>
 </body>
 </html>

@@ -186,6 +186,14 @@ describe('mock client for other tables', () => {
     expect(upd).toEqual({ data: [{ id: '2', n: 9 }], error: null });
   });
 
+  test('extra tables are served alongside the main one', async () => {
+    const client = make([{ id: '1' }], { table: 'brainy_todos', tables: { brainy_todo_collateral: [{ todo_id: '1', filename: 'a.md' }] } });
+    const { data } = await client.from('brainy_todo_collateral').select('filename').eq('todo_id', '1');
+    expect(data).toEqual([{ filename: 'a.md' }]);
+    expect(client.calls[0].table).toBe('brainy_todo_collateral');
+    expect(() => client.from('nope')).toThrow(/unexpected table/);
+  });
+
   test('an optional check rejects an update the way a DB constraint would, leaving the row alone', async () => {
     const client = make([{ id: '1', n: 1 }], { table: 't', check: (row) => (row.n > 5 ? 'n too big' : null) });
     const res = await client.from('t').update({ n: 9 }).eq('id', '1');

@@ -23,11 +23,10 @@ test('has a Trips link to the trip planner, marked active on that page', () => {
   expect(trips.className).toBe('active');
 });
 
-test('has a Board link right after TODOs', () => {
+test('TODOs links to the board at browse/todos/, and there is no separate Board link', () => {
   loadNav();
   const labels = [...document.querySelectorAll('#brainy-nav a')].map((a) => a.textContent);
-  expect(labels.slice(labels.indexOf('TODOs'), labels.indexOf('TODOs') + 2)).toEqual(['TODOs', 'Board']);
-  const board = [...document.querySelectorAll('#brainy-nav a')].find((a) => a.textContent === 'Board');
-  expect(board.getAttribute('href')).toBe('http://localhost/brainy/views/board/');
-  expect(board.className).toBe(''); // not active on the trip page
+  expect(labels).not.toContain('Board');
+  const todos = [...document.querySelectorAll('#brainy-nav a')].find((a) => a.textContent === 'TODOs');
+  expect(todos.getAttribute('href')).toBe('http://localhost/brainy/browse/todos/');
 });

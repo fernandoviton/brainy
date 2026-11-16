@@ -31,19 +31,18 @@ The browse pages support hash-based deep links (they work on static hosting — 
 
 | Page | Format | Example |
 |------|--------|---------|
-| TODOs | `browse/todos/#todo=<name>` | `browse/todos/#todo=fix-bug` |
+| TODOs | `browse/todos/#todo=<name>` (opens the details drawer; also `priority`, `category`, `q`, `archived=1`) | `browse/todos/#todo=fix-bug`, `browse/todos/#priority=P1&q=roof` |
 | Captures | `browse/captures/#capture=<id>` | `browse/captures/#capture=3f2a…` |
 | Knowledge | `browse/knowledge/#knowledge=<path>` | `browse/knowledge/#knowledge=tools/git/rebase.md` |
-| TODO board | `views/board/[#priority=<P0-P3>][&category=<c>][&q=<text>]` | `views/board/#priority=P1&q=roof` |
 | Trip planner | `views/trip/#entry=<trip>/planner.md[&tab=<tab>][&decision=<id>]` | `views/trip/#entry=travel/trips/demo/planner.md&tab=budget` |
 
 HTML attachments (knowledge attachments, TODO collateral, capture media) open in `browse/viewer/#path=<storage path>&name=<filename>` rather than at their signed URL: Supabase Storage serves HTML as `text/plain` + `nosniff`, so the raw link shows source. The viewer downloads the file with the signed-in client and renders it in an `<iframe sandbox="allow-scripts …">` via `srcdoc` — never `allow-same-origin`, so the attachment's scripts can't read the Supabase session. A "Download original" link serves the raw file.
 
-On load the linked item is expanded (todos/knowledge) or highlighted (captures) and scrolled into view. If a linked todo or capture isn't in the default filter, it is fetched directly and shown on top. Expanding/collapsing a todo or knowledge card updates the URL hash so the current view can be copied as a link.
+On load the linked item is opened (todos: in the details drawer; knowledge: expanded) or highlighted (captures) and scrolled into view. A linked TODO that isn't live is looked up in the archive; a linked capture outside the default filter is fetched directly and shown on top. Opening a TODO or expanding a knowledge card updates the URL hash so the current view can be copied as a link.
 
 The trip planner (`views/trip/`) reads and writes its knowledge entry directly; see `views/trip/README.md`. Its `#entry=` hash is lost in the Google OAuth redirect, so the page stashes it in `sessionStorage` before signing in and restores it afterwards.
 
-The TODO board (`views/board/`) is an alternative to the TODOs page: live TODOs in Inbox / Active / Later / Scheduled columns, drag and drop plus a per-card status control (for phones), quick priority and due edits, filters in the hash, and a due strip. It writes `brainy_todos` directly, so `core.js` enforces the CLI's rules in the browser: `scheduled_date` is set if and only if the status is `scheduled` (moving to Scheduled asks for a date, moving off clears it), and only status, priority and due are editable (no archive or delete). Failed saves re-fetch the board. Mock mode on localhost uses `fixture.js` and the trip view's `mock-client.js`.
+The TODOs page (`browse/todos/`) is a board: live TODOs in Inbox / Active / Later / Scheduled columns, drag and drop plus a per-card status control (for phones), quick priority and due edits, filters in the hash, and a due strip. It writes `brainy_todos` directly, so `core.js` enforces the CLI's rules in the browser: `scheduled_date` is set if and only if the status is `scheduled` (moving to Scheduled asks for a date, moving off clears it), and only status, priority and due are editable (no archive or delete). Failed saves re-fetch the board. A card's name opens a details drawer (`#todo=<name>`) with the notes and attachments (`detail.js`); names not on the board fall back to the archive. `#archived=1` lists archived TODOs. Mock mode on localhost uses `fixture.js` and the trip view's `mock-client.js`.
 
 ## Tests
 

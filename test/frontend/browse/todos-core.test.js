@@ -1,5 +1,5 @@
-// Pure logic behind the TODO board (frontend/views/board/core.js).
-const B = require('../../../frontend/views/board/core');
+// Pure logic behind the TODO board (frontend/browse/todos/core.js).
+const B = require('../../../frontend/browse/todos/core');
 
 const t = (name, extra) => Object.assign({ name, status: 'active', priority: 'P2', due: null, scheduled_date: null, category: null, summary: '' }, extra);
 
@@ -128,16 +128,21 @@ describe('due buckets', () => {
 });
 
 describe('hash', () => {
-  test('round-trips the filters', () => {
-    const f = { priority: 'P1', category: 'home & garden', q: 'roof leak' };
+  const EMPTY = { priority: '', category: '', q: '', todo: '', archived: '' };
+  test('round-trips the filters, the open TODO and the archived view', () => {
+    const f = { priority: 'P1', category: 'home & garden', q: 'roof leak', todo: 'fix-roof', archived: '1' };
     const hash = B.hashFor(f);
     expect(hash).toMatch(/^#/);
     expect(B.parseHash(hash)).toEqual(f);
   });
+  test('#todo=<name> alone is the deep link other pages use', () => {
+    expect(B.hashFor({ todo: 'fix-roof' })).toBe('#todo=fix-roof');
+    expect(B.parseHash('#todo=fix-roof')).toEqual(Object.assign({}, EMPTY, { todo: 'fix-roof' }));
+  });
   test('empty filters give an empty hash, and bad or foreign values are ignored', () => {
     expect(B.hashFor({})).toBe('');
     expect(B.hashFor({ priority: '', category: '', q: '  ' })).toBe('');
-    expect(B.parseHash('')).toEqual({ priority: '', category: '', q: '' });
-    expect(B.parseHash('#priority=P7&access_token=abc')).toEqual({ priority: '', category: '', q: '' });
+    expect(B.parseHash('')).toEqual(EMPTY);
+    expect(B.parseHash('#priority=P7&access_token=abc&archived=yes')).toEqual(EMPTY);
   });
 });

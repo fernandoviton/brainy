@@ -25,13 +25,35 @@
       return {
         id: 'demo-' + (i + 1),
         name: r[0], status: r[1], priority: r[2], category: r[3], summary: r[4],
-        due: r[5], scheduled_date: r[6] || null,
+        due: r[5], scheduled_date: r[6] || null, notes: NOTES[r[0]] || null,
         created_at: '2030-01-01T10:00:' + (i < 10 ? '0' : '') + i + '.000Z',
       };
     });
   }
 
-  var api = { rows: rows };
+  var NOTES = {
+    'demo-fix-faucet': '## Plan\n\n- Buy a demo washer\n- See also `demo-paint-fence`',
+  };
+
+  // Extra tables for the detail drawer: attachments and the archive.
+  function tables() {
+    return {
+      brainy_todo_collateral: [
+        { id: 'c1', todo_id: 'demo-4', filename: 'parts.md', content_type: 'text/markdown', text_content: '# Parts list\n\n- one demo washer', storage_path: null },
+        { id: 'c2', todo_id: 'demo-4', filename: 'photo.jpg', content_type: 'image/jpeg', text_content: null, storage_path: 'todos/demo-4/photo.jpg' },
+      ],
+      brainy_archive_entries: [
+        { id: 'a1', todo_name: 'demo-old-move', completion_date: '2030-02-01', year_month: '2030-02',
+          summary_text: 'Moved the sample boxes.', todo_snapshot: { priority: 'P2', category: 'home' }, collateral_snapshot: null },
+        { id: 'a2', todo_name: 'demo-old-taxes', completion_date: '2030-03-01', year_month: '2030-03',
+          summary_text: 'Filed the pretend return.\n\nKept the example receipts.', todo_snapshot: { priority: 'P1', category: 'finance' },
+          collateral_snapshot: ['receipt.pdf'] },
+      ],
+      brainy_knowledge: [],
+    };
+  }
+
+  var api = { rows: rows, tables: tables };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BoardFixture = api;
 })(this);
