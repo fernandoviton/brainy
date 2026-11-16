@@ -173,3 +173,23 @@ describe('mock client', () => {
     expect(r).toEqual({ data: [], error: null });
   });
 });
+
+describe('mock client for other tables', () => {
+  const { createMockClient: make } = require('../../../frontend/views/trip/mock-client');
+
+  test('serves the table it was made for, with order, limit and update().select()', async () => {
+    const client = make([{ id: '1', n: 2 }, { id: '2', n: 1 }, { id: '3', n: 3 }], { table: 'brainy_todos' });
+    expect(() => client.from('brainy_knowledge')).toThrow(/unexpected table/);
+    const { data } = await client.from('brainy_todos').select('id').order('n', { ascending: false }).limit(2);
+    expect(data).toEqual([{ id: '3' }, { id: '1' }]);
+    const upd = await client.from('brainy_todos').update({ n: 9 }).eq('id', '2').select('id, n');
+    expect(upd).toEqual({ data: [{ id: '2', n: 9 }], error: null });
+  });
+
+  test('an optional check rejects an update the way a DB constraint would, leaving the row alone', async () => {
+    const client = make([{ id: '1', n: 1 }], { table: 't', check: (row) => (row.n > 5 ? 'n too big' : null) });
+    const res = await client.from('t').update({ n: 9 }).eq('id', '1');
+    expect(res.error.message).toBe('n too big');
+    expect(client.rows[0].n).toBe(1);
+  });
+});

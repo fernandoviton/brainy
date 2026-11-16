@@ -22,3 +22,12 @@ test('has a Trips link to the trip planner, marked active on that page', () => {
   expect(trips.getAttribute('href')).toBe('http://localhost/brainy/views/trip/');
   expect(trips.className).toBe('active');
 });
+
+test('has a Board link right after TODOs', () => {
+  loadNav();
+  const labels = [...document.querySelectorAll('#brainy-nav a')].map((a) => a.textContent);
+  expect(labels.slice(labels.indexOf('TODOs'), labels.indexOf('TODOs') + 2)).toEqual(['TODOs', 'Board']);
+  const board = [...document.querySelectorAll('#brainy-nav a')].find((a) => a.textContent === 'Board');
+  expect(board.getAttribute('href')).toBe('http://localhost/brainy/views/board/');
+  expect(board.className).toBe(''); // not active on the trip page
+});

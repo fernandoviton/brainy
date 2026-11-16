@@ -22,7 +22,7 @@ Run locally: `cd frontend && python3 -m http.server 8080 --bind 127.0.0.1`, then
 | `entry-store.js` | Generic: parse/serialize a "preamble + json block" knowledge entry, `load`, `applyOp` (optimistic concurrency + retry), `get`, `list`. No trip logic; reusable by another view. |
 | `core.js` | Pure trip logic: dates, headcount, costs, budget, scenarios, ops, hash routing |
 | `app.js`, `app.css`, `index.html` | The UI (plain DOM; Leaflet, marked, DOMPurify and supabase-js from CDNs) |
-| `mock-client.js` | In-memory stand-in for the Supabase query shapes the store uses (mock mode and tests) |
+| `mock-client.js` | In-memory stand-in for the Supabase query shapes the store uses (mock mode and tests). Also backs the TODO board (`views/board/`) via `{ table: 'brainy_todos' }`. |
 | `fixture.js` | Fake demo plan for mock mode |
 
 Tests: `test/frontend/views/trip-core.test.js`, `trip-entry-store.test.js`, `trip-page.test.js` (jsdom smoke test of the page in mock mode and signed-in mode).

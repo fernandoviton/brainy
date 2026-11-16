@@ -1,6 +1,12 @@
 // In-memory stand-in for the Supabase client, covering only the query shapes
-// entry-store.js uses. Backs the page's mock mode (localhost, no config) and
-// the unit tests. Like the real table, every update bumps `updated_at`.
+// entry-store.js and the TODO board use. Backs the pages' mock mode
+// (localhost, no config) and the unit tests. Like the real tables, every
+// update bumps `updated_at`.
+//
+//   createMockClient(rows, { table, check })
+//     table   the one table it serves (default 'brainy_knowledge')
+//     check   optional (row) => error message | null, run on each updated row
+//             before it is saved, like a DB check constraint
 //
 //   client.rows          the table (mutate it to simulate someone else's edit)
 //   client.calls         every query run: { op, columns, filters, values }
@@ -21,7 +27,9 @@
     return out;
   }
 
-  function createMockClient(rows) {
+  function createMockClient(rows, options) {
+    options = options || {};
+    var table = options.table || 'brainy_knowledge';
     var lastStamp = 0;
     var client = { rows: rows || [], calls: [], failNext: null, beforeUpdate: null };
 
@@ -31,7 +39,7 @@
     }
 
     function query() {
-      var q = { op: 'select', columns: null, filters: [], values: null, single: false, orderBy: null };
+      var q = { op: 'select', columns: null, filters: [], values: null, single: false, orderBy: null, desc: false, limit: null };
       function matches(row) {
         return q.filters.every(function (f) {
           if (f[0] === 'eq') return row[f[1]] === f[2];
@@ -48,6 +56,10 @@
         if (q.op === 'update' && client.beforeUpdate) client.beforeUpdate();
         var hits = client.rows.filter(matches);
         if (q.op === 'update') {
+          for (var i = 0; i < hits.length && options.check; i++) {
+            var message = options.check(Object.assign(clone(hits[i]), q.values));
+            if (message) return { data: null, error: { message: message } };
+          }
           hits.forEach(function (row) {
             Object.keys(q.values).forEach(function (k) { row[k] = q.values[k]; });
             row.updated_at = stamp();
@@ -55,8 +67,10 @@
         }
         if (q.orderBy) {
           var key = q.orderBy;
-          hits = hits.slice().sort(function (a, b) { return a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0; });
+          var dir = q.desc ? -1 : 1;
+          hits = hits.slice().sort(function (a, b) { return dir * (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0); });
         }
+        if (q.limit !== null) hits = hits.slice(0, q.limit);
         var data = hits.map(function (r) { return pick(r, q.columns); });
         if (q.single) {
           if (data.length > 1) return { data: null, error: { message: 'multiple rows' } };
@@ -69,7 +83,8 @@
         update: function (values) { q.op = 'update'; q.values = clone(values); return builder; },
         eq: function (col, val) { q.filters.push(['eq', col, val]); return builder; },
         like: function (col, pattern) { q.filters.push(['like', col, pattern]); return builder; },
-        order: function (col) { q.orderBy = col; return builder; },
+        order: function (col, opts) { q.orderBy = col; q.desc = !!(opts && opts.ascending === false); return builder; },
+        limit: function (n) { q.limit = n; return builder; },
         maybeSingle: function () { q.single = true; return builder; },
         then: function (resolve, reject) {
           var result;
@@ -80,8 +95,8 @@
       return builder;
     }
 
-    client.from = function (table) {
-      if (table !== 'brainy_knowledge') throw new Error('mock client: unexpected table ' + table);
+    client.from = function (name) {
+      if (name !== table) throw new Error('mock client: unexpected table ' + name);
       return query();
     };
     return client;
