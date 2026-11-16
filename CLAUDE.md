@@ -141,7 +141,7 @@ Use `node backend/cli.js todo list` to scan TODOs. Use `todo get <name>` for ful
 
 ## Trip planner
 
-Big trips can have a planning page on Brainy's site: `https://fernandoviton.github.io/brainy/views/trip/#entry=travel/trips/<trip>/planner.md` (behind the usual Google sign-in). The page reads and writes the knowledge entry `<trip>/planner.md` (JSON) directly; that entry is the only copy of the data. When working on such a trip, check that entry's unresolved `comments` and `addedBy` options: they're the owner's review notes. Act on them, then mark them resolved. To edit, `knowledge get` it, change the JSON, and upsert the whole entry with `--file` (an open page re-applies its next change on top of yours). Format: `frontend/views/trip/README.md`.
+Big trips can have a planning page on Brainy's site: `https://fernandoviton.github.io/brainy/views/trip/#entry=travel/trips/<trip>/planner.md` (behind the usual Google sign-in; the nav's **Trips** link lists every `planner.md`). The page reads and writes the knowledge entry `<trip>/planner.md` (JSON) directly; that entry is the only copy of the data. When working on such a trip, check that entry's unresolved `comments` and `addedBy` options: they're the owner's review notes. Act on them, then mark them resolved. To edit, `knowledge get` it, change the JSON, and upsert the whole entry with `--file` (an open page re-applies its next change on top of yours). Format: `frontend/views/trip/README.md`.
 
 ## Archiving (on TODO completion)
 

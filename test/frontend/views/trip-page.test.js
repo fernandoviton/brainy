@@ -48,7 +48,7 @@ test('index.html loads every local script the page needs, in order', () => {
 });
 
 test('renders the fixture in mock mode with the entry in the hash', async () => {
-  loadPage();
+  loadPage('#entry=sample/trips/demo-trip/planner.md');
   await flush();
   expect(text('#trip-title')).toBe('Demo trip');
   expect(text('#mock-banner')).toMatch(/mock mode/i);
@@ -57,6 +57,46 @@ test('renders the fixture in mock mode with the entry in the hash', async () => 
   expect(text('#view')).toMatch(/Where to stay in Lakeside/);
   const tab = document.querySelector('#tabs a[data-tab="calendar"]').getAttribute('href');
   expect(tab).toBe('#entry=sample/trips/demo-trip/planner.md&tab=calendar');
+});
+
+describe('trip list (no entry in the hash)', () => {
+  const hidden = (sel) => document.querySelector(sel).hidden;
+
+  test('lists every planner entry and hides the trip-only controls', async () => {
+    loadPage();
+    await flush();
+    await flush();
+    expect(text('#trip-title')).toBe('Trips');
+    expect(hidden('#tabs')).toBe(true);
+    expect(hidden('#who-select')).toBe(true);
+    expect(hidden('#reload-btn')).toBe(true);
+    const links = [...document.querySelectorAll('#view a.trip-link')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#entry=sample/trips/demo-trip/planner.md']);
+    expect(links[0].textContent).toMatch(/demo-trip/);
+    expect(window.location.hash).toBe('');
+  });
+
+  test('picking a trip opens it, and going back shows the list again', async () => {
+    loadPage();
+    await flush();
+    await flush();
+    window.location.hash = '#entry=sample/trips/demo-trip/planner.md';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await flush();
+    await flush();
+    expect(text('#trip-title')).toBe('Demo trip');
+    expect(hidden('#tabs')).toBe(false);
+    expect(hidden('#who-select')).toBe(false);
+    expect(text('#view')).toMatch(/Where to stay in Lakeside/);
+
+    window.location.hash = '';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await flush();
+    await flush();
+    expect(text('#trip-title')).toBe('Trips');
+    expect(hidden('#tabs')).toBe(true);
+    expect(document.querySelectorAll('#view a.trip-link')).toHaveLength(1);
+  });
 });
 
 test('tabs, decisions and research route through the hash', async () => {
@@ -139,11 +179,15 @@ describe('signed-in mode (Supabase config present)', () => {
     expect(client.calls[0].filters).toEqual([['eq', 'path', 'sample/trips/demo-trip/planner.md']]);
   });
 
-  test('signed in with no entry anywhere: asks which trip', async () => {
+  test('signed in with no entry anywhere: lists the trips', async () => {
     loadPage('', CONFIG);
     session({ user: { id: 'u' } });
     await flush();
-    expect(text('#view')).toMatch(/#entry=travel\/trips\/<trip>\/planner\.md/);
+    await flush();
+    await flush();
+    expect(text('#trip-title')).toBe('Trips');
+    expect([...document.querySelectorAll('#view a.trip-link')].map((a) => a.getAttribute('href')))
+      .toEqual(['#entry=sample/trips/demo-trip/planner.md']);
   });
 
   test('sign out ends only this browser session', () => {

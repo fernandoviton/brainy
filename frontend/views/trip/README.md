@@ -7,6 +7,7 @@ https://fernandoviton.github.io/brainy/views/trip/#entry=travel/trips/<trip>/pla
 ```
 
 - **Data** lives in Brainy, in the knowledge entry named by `#entry=` (a trip folder works too: `#entry=travel/trips/<trip>` means its `planner.md`). The entry is a short markdown preamble followed by one ```` ```json ```` block. Nothing trip-specific is stored in the repo.
+- **Trip list:** with no `#entry=` (the nav's **Trips** link), the page lists every knowledge entry named `planner.md` and links to each.
 - **Auth** is the site's Google sign-in. The page talks to `brainy_knowledge` directly with the signed-in Supabase client (RLS: your own rows only). The OAuth redirect drops the URL hash, so the entry path is stashed in `sessionStorage` before sign-in and restored after.
 - **Writes**: every change is an op (`core.applyOp`). `entry-store.js` re-reads the entry, applies the op, and updates with `eq('updated_at', <value read>)`. If no row changed, someone else (the CLI, an agent, another tab) saved in between, so it re-reads and re-applies, up to 4 tries, then reports "kept changing… reload". Ops from one page are queued one at a time.
 - **Hash routes**: `#entry=<path>` plus one of `&tab=<tab>`, `&research=<knowledge path>`, and optionally `&decision=<id>` (opens the decision drawer).

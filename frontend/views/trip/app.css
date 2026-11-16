@@ -246,6 +246,11 @@ table.budget tr.total td { font-weight: 700; border-top: 2px solid var(--ink); }
 #brainy-nav { display: flex; justify-content: center; gap: .25rem; flex-wrap: wrap; padding: .45rem 1rem; border-bottom: 1px solid var(--line); background: var(--bg); }
 #brainy-nav a { font-size: .82rem; color: var(--muted); padding: .3rem .65rem; border-radius: 6px; }
 #brainy-nav a:hover { color: var(--ink); background: var(--accent-soft); text-decoration: none; }
+#brainy-nav a.active { color: var(--ink); font-weight: 600; }
 #mock-banner { padding: .4rem 1rem; background: #fdecd2; border-bottom: 1px solid #e8b45c; color: #9b2c0a; font-size: .85rem; text-align: center; }
 #auth-section { max-width: 420px; margin: 4rem auto; text-align: center; }
 #auth-section p { color: var(--muted); margin: .6rem 0 1.2rem; }
+
+/* Trip list (no #entry= in the hash) */
+.trip-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; max-width: 640px; }
+.trip-list .trip-link { font-size: 1.15rem; font-weight: 600; }

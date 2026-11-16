@@ -897,10 +897,12 @@
   function route() {
     var params = C.parseHash(location.hash);
     var next = C.normalizeEntryPath(params.entry);
-    if (next && next !== entryPath) {
+    if (!next) return entryPath ? showTripList() : undefined;
+    if (next !== entryPath) {
       entryPath = next;
       plan = null;
       closeDrawerQuiet();
+      setTripControls(true);
       setTabLinks();
       return load().then(route);
     }
@@ -932,11 +934,49 @@
   document.getElementById('reload-btn').addEventListener('click', function () { load().then(function () { toast('Reloaded from Brainy'); }); });
 
   // ── Boot: mock mode, or Supabase sign-in ───────────────────────────────
+  // The trip list: shown when the hash names no entry (e.g. the nav's Trips link).
+  function setTripControls(on) {
+    ['tabs', 'who-select', 'reload-btn'].forEach(function (id) { document.getElementById(id).hidden = !on; });
+    document.querySelector('label[for="who-select"]').hidden = !on;
+  }
+
+  function showTripList() {
+    entryPath = null;
+    plan = null;
+    closeDrawerQuiet();
+    setTripControls(false);
+    document.title = 'Trips';
+    document.getElementById('trip-title').textContent = 'Trips';
+    document.getElementById('trip-sub').textContent = '';
+    var v = document.getElementById('view');
+    v.innerHTML = '';
+    v.appendChild(h('p', { class: 'muted' }, 'Loading trips from Brainy…'));
+    return store.list('').then(function (rows) {
+      if (entryPath) return; // a trip was opened while listing
+      var trips = rows.filter(function (r) { return /(^|\/)planner\.md$/.test(r.path); });
+      if (!trips.length) {
+        showMessage('No trips yet', 'No knowledge entry named planner.md was found.',
+          'A trip plan lives at travel/trips/<trip>/planner.md.');
+        return;
+      }
+      v.innerHTML = '';
+      v.appendChild(h('ul', { class: 'trip-list' }, trips.map(function (r) {
+        var folder = r.path.replace(/\/?planner\.md$/, '');
+        return h('li', { class: 'card' },
+          h('a', { class: 'trip-link', href: C.hashFor({ entry: r.path }) }, folder.split('/').pop() || folder),
+          h('div', { class: 'muted small' }, folder));
+      })));
+    }).catch(function (e) {
+      showMessage('Could not list trips', e.message);
+    });
+  }
+
   function start(client, path) {
     store = EntryStore.createEntryStore({ client: client, apply: C.applyOp });
-    entryPath = path;
     document.getElementById('auth-section').hidden = true;
     document.getElementById('app').hidden = false;
+    if (!path) return showTripList();
+    entryPath = path;
     setTabLinks();
     if (hashEntry() !== path) {
       // No entry in the hash yet (mock default, or back from OAuth): put it
@@ -962,7 +1002,7 @@
       // Mock mode: fake data in memory, reset on reload. Never real data.
       document.getElementById('mock-banner').hidden = false;
       document.getElementById('logout-btn').hidden = true;
-      start(MockClient.createMockClient(PlannerFixture.rows()), hashEntry() || PlannerFixture.ENTRY_PATH);
+      start(MockClient.createMockClient(PlannerFixture.rows()), hashEntry());
       return;
     }
 
@@ -995,13 +1035,6 @@
       setTimeout(function () {
         var entry = hashEntry() || C.normalizeEntryPath(sessionStorage.getItem(STASH_KEY));
         sessionStorage.removeItem(STASH_KEY);
-        if (!entry) {
-          document.getElementById('auth-section').hidden = true;
-          document.getElementById('app').hidden = false;
-          showMessage('Which trip?', 'Open this page with the plan\'s knowledge entry in the URL.',
-            'e.g. views/trip/#entry=travel/trips/<trip>/planner.md');
-          return;
-        }
         start(db, entry);
       }, 0);
     });
