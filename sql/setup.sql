@@ -388,6 +388,24 @@ create policy "Users manage own brainy_scheduler_state" on brainy_scheduler_stat
   with check (auth.uid() = user_id);
 
 ----------------------------------------------------------------------
+-- Defense in depth: no anonymous access at all
+-- RLS already hides every row from anon (Brainy is signed-in only);
+-- revoking the grants keeps a table closed even if its policy breaks.
+----------------------------------------------------------------------
+revoke all on table brainy_todos from anon;
+revoke all on table brainy_todo_collateral from anon;
+revoke all on table brainy_knowledge from anon;
+revoke all on table brainy_knowledge_attachments from anon;
+revoke all on table brainy_archive_entries from anon;
+revoke all on table brainy_archive_summaries from anon;
+revoke all on table brainy_captures from anon;
+revoke all on table brainy_capture_media from anon;
+revoke all on table brainy_scheduled_jobs from anon;
+revoke all on table brainy_job_runs from anon;
+revoke all on table brainy_run_events from anon;
+revoke all on table brainy_scheduler_state from anon;
+
+----------------------------------------------------------------------
 -- Storage bucket for binary files
 ----------------------------------------------------------------------
 insert into storage.buckets (id, name, public)
