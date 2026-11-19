@@ -1,8 +1,8 @@
 /* global BoardCore, TodoDetail, MockClient, BoardFixture, CONFIG, supabase, marked, DOMPurify,
    escapeHtml, loadReferenceIndex, linkifyReferences, resolveAttachmentLinks */
-// TODOs page: live TODOs on a board in columns by status, with drag and drop,
-// a per-card status control (for phones), quick priority/due edits, filters
-// kept in the URL hash, and a due strip. A card's name opens a details drawer
+// TODOs page: live TODOs on a board in columns by status, with a per-card
+// status control (no drag and drop, so card text can be selected and copied),
+// quick priority/due edits, filters kept in the URL hash, and a due strip. A card's name opens a details drawer
 // (notes, attachments) at #todo=<name>, the deep link other pages use, falling
 // back to the archive for completed TODOs. #archived=1 lists the archive. Reads and writes brainy_todos directly with the
 // signed-in Supabase client (RLS: own rows only). The rules the CLI's storage
@@ -20,7 +20,6 @@
   var db = null;
   var todos = [];
   var filters = C.parseHash(location.hash);
-  var dragging = null;
   var archiveRows = null; // loaded on first visit to the Archived view
   var shownTodo = null; // name in the details drawer
   var detailToken = 0; // drops stale detail loads
@@ -165,19 +164,20 @@
   function renderCard(t, today) {
     var overdue = C.isOverdue(t, today);
     return h('article', {
-      class: 'todo-card' + (overdue ? ' overdue' : ''), draggable: 'true', 'data-name': t.name,
-      ondragstart: function (e) {
-        dragging = t.name;
-        if (e.dataTransfer) { e.dataTransfer.setData('text/plain', t.name); e.dataTransfer.effectAllowed = 'move'; }
-        e.currentTarget.classList.add('dragging');
-      },
-      ondragend: function (e) { dragging = null; e.currentTarget.classList.remove('dragging'); },
+      class: 'todo-card' + (overdue ? ' overdue' : ''), 'data-name': t.name,
     },
       h('div', { class: 'card-head' },
         h('span', { class: 'badge prio prio-' + (t.priority || 'none') }, t.priority || '–'),
-        h('a', {
-          class: 'card-name', href: C.hashFor(Object.assign({}, filters, { todo: t.name })), draggable: 'false',
-          onclick: function (e) { e.preventDefault(); navigate({ todo: t.name }, true); },
+        // Plain text so the name can be selected and copied (browsers won't
+        // drag-select link text); a plain click or Enter opens the details.
+        h('span', {
+          class: 'card-name', role: 'link', tabindex: '0', title: 'Open details',
+          onclick: function () {
+            var sel = window.getSelection && window.getSelection();
+            if (sel && !sel.isCollapsed && sel.toString()) return; // the click that ends a selection
+            navigate({ todo: t.name }, true);
+          },
+          onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); navigate({ todo: t.name }, true); } },
         }, t.name)),
       t.summary ? h('div', { class: 'summary' }, t.summary) : null,
       h('div', { class: 'meta' },
@@ -267,21 +267,6 @@
     });
   }
 
-  // ── Drag and drop onto columns ────────────────────────────────────────
-  [].forEach.call(document.querySelectorAll('.column'), function (col) {
-    col.addEventListener('dragover', function (e) { if (dragging) { e.preventDefault(); col.classList.add('drop-target'); } });
-    col.addEventListener('dragleave', function (e) {
-      if (!e.relatedTarget || !col.contains(e.relatedTarget)) col.classList.remove('drop-target');
-    });
-    col.addEventListener('drop', function (e) {
-      e.preventDefault();
-      col.classList.remove('drop-target');
-      var name = dragging || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
-      dragging = null;
-      if (name) moveTo(name, col.getAttribute('data-status'));
-    });
-  });
-
   // ── Filters and the hash ──────────────────────────────────────────────
   // Merge `changes` into the hash state and redraw. Opening a TODO pushes a
   // history entry, so Back closes the drawer; everything else replaces.
@@ -341,7 +326,13 @@
       list.appendChild(h('li', { class: 'archive-item', 'data-name': t.name },
         h('a', {
           href: C.hashFor(Object.assign({}, filters, { todo: t.name })),
-          onclick: function (e) { e.preventDefault(); navigate({ todo: t.name }, true); },
+          onclick: function (e) {
+            e.preventDefault();
+            // Selecting the name to copy it ends in a click; don't open the drawer then.
+            var sel = window.getSelection && window.getSelection();
+            if (sel && !sel.isCollapsed && sel.toString()) return;
+            navigate({ todo: t.name }, true);
+          },
         }, t.name),
         t.completion_date ? h('span', { class: 'muted small' }, ' · done ' + t.completion_date) : null,
         t.summary ? h('div', { class: 'summary' }, t.summary) : null));

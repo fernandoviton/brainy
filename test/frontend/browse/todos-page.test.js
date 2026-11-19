@@ -70,7 +70,12 @@ describe('mock mode', () => {
     await flush();
     const t = window.__board.todos().find((r) => r.due && r.category && r.summary);
     const c = card(t.name);
-    expect(c.querySelector('a.card-name').getAttribute('href')).toBe('#todo=' + encodeURIComponent(t.name));
+    // Plain text, not a link: browsers won't drag-select link text, and the name must be copyable.
+    const nameEl = c.querySelector('.card-name');
+    expect(nameEl.tagName).not.toBe('A');
+    expect(nameEl.textContent).toBe(t.name);
+    expect(nameEl.getAttribute('role')).toBe('link');
+    expect(nameEl.getAttribute('tabindex')).toBe('0');
     expect(c.textContent).toContain(t.summary);
     expect(c.querySelector('.badge.prio').textContent).toBe(t.priority);
     expect(c.querySelector('.category').textContent).toBe(t.category);
@@ -147,16 +152,37 @@ describe('mock mode', () => {
     expect(namesIn('active')).toContain(name);
   });
 
-  test('drag and drop between columns moves the card', async () => {
+  test('cards are not draggable, so their text can be selected and copied', async () => {
     loadPage();
     await flush();
+    $$('.todo-card').forEach((c) => expect(c.getAttribute('draggable')).toBeNull());
     const name = namesIn('later')[0];
     card(name).dispatchEvent(new Event('dragstart', { bubbles: true }));
     const target = column('active');
     target.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }));
     target.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
     await flush();
-    expect(namesIn('active')).toContain(name);
+    expect(namesIn('later')).toContain(name);
+  });
+
+  test('selecting the name text does not open the details', async () => {
+    loadPage();
+    await flush();
+    const link = card('demo-fix-faucet').querySelector('.card-name');
+    window.getSelection().selectAllChildren(link);
+    link.click();
+    await flush();
+    expect(window.location.hash).not.toMatch(/todo=/);
+    window.getSelection().removeAllRanges();
+  });
+
+  test('Enter on the focused name opens the details', async () => {
+    loadPage();
+    await flush();
+    card('demo-fix-faucet').querySelector('.card-name')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    expect(window.location.hash).toBe('#todo=demo-fix-faucet');
   });
 
   test('quick edits of priority and due save immediately', async () => {
@@ -205,7 +231,7 @@ describe('details drawer and archive (mock mode)', () => {
   test('clicking a card name opens its details: notes, text and file attachments', async () => {
     loadPage();
     await flush();
-    card('demo-fix-faucet').querySelector('a.card-name').click();
+    card('demo-fix-faucet').querySelector('.card-name').click();
     await flush();
     expect(window.location.hash).toBe('#todo=demo-fix-faucet');
     expect(drawer().hidden).toBe(false);
